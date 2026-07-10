@@ -7,39 +7,29 @@ vector<int> w;
 bool bfs(int x)
 {
 	deque<int> d;
-	vector<int> sum(N + 1, INT_MAX);
-	sum[1] = 0;
+	vector<int> dist(n + 1, INT_MAX);
+	dist[1] = 0;
 	d.push_back(1);
-	while (!sum.empty())
+	while (!d.empty())
 	{
 		int u = d.front();
 		d.pop_front();
-		int v = sum[u];
-		if (v > k)
-		{
-			continue;
-		}
-		if (u == n){
-			return true;
-		}
+		int du = dist[u];
+		if (du > k) continue;
+		if (u == n) return true;
 		for (auto &to : g[u])
 		{
 			int b = to.first;
 			int e = to.second;
-			int w = (e > x ? 1 : 0);
-			if( v + w < sum[v]){
-				sum[v] = v + w;
-				if (w)
-				{
-					d.push_back(v);
-				}else
-				{
-					d.push_front(v);
-				}
+			int cost = (e > x ? 1 : 0);
+			if (du + cost < dist[b]) {
+				dist[b] = du + cost;
+				if (cost) d.push_back(b);
+				else d.push_front(b);
 			}
 		}
 	}
-	return sum[n] <= k;
+	return dist[n] <= k;
 }
 int main()
 {
@@ -49,7 +39,7 @@ int main()
 		int a, b, l;
 		cin >> a >> b >> l;
 		g[a].emplace_back(b, l);
-		g[a].emplace_back(a, l);
+		g[b].emplace_back(a, l);
 		w.push_back(l);
 	}
 	w.push_back(0);
