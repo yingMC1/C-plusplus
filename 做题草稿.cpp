@@ -22,10 +22,10 @@ bool bfs(int x)
 		if (u == n){
 			return true;
 		}
-		for (auto &to : g[i])
+		for (auto &to : g[u])
 		{
-			int b = to.first();
-			int e = to.second();
+			int b = to.first;
+			int e = to.second;
 			int w = (e > x ? 1 : 0);
 			if( v + w < sum[v]){
 				sum[v] = v + w;
@@ -44,7 +44,7 @@ bool bfs(int x)
 int main()
 {
 	cin >> n >> p >> k;
-	for (int i = 1; i <= n; i++)
+	for (int i = 1; i <= p; i++)
 	{
 		int a, b, l;
 		cin >> a >> b >> l;
