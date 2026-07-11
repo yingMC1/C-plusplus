@@ -1,7 +1,7 @@
 ﻿{
     "code-runner.runInTerminal":  false,
     "code-runner.executorMap":  {
-                                    "cpp":  "cd /d $dir \u0026\u0026 g++ $fileName -O2 -o $fileNameWithoutExt.exe -lws2_32 -fexec-charset=UTF-8 \u0026\u0026 start cmd /c \"chcp 65001 \u003enul \u0026\u0026 $fileNameWithoutExt.exe \u0026 pause\""
+                                    "cpp":  "cd /d $dir \u0026\u0026 g++ $fileName -O2 -s -static -o $fileNameWithoutExt.exe -lws2_32 -fexec-charset=UTF-8 \u0026\u0026 start cmd /c \"chcp 65001 \u003enul \u0026\u0026 $fileNameWithoutExt.exe \u0026 pause\""
                                 },
     "code-runner.saveFileBeforeRun":  true,
     "code-runner.clearPreviousOutput":  true

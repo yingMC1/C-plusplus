@@ -1,4 +1,4 @@
-// 无限枪洲 - 完整联机同步版（最终版）
+// 无限枪洲 - 终极修复版（击杀私有，不共享资源）
 // 编译: g++ -std=c++17 -O2 -s -static -o 无限枪洲.exe main.cpp -lws2_32
 
 #define WIN32_LEAN_AND_MEAN
@@ -33,12 +33,16 @@ inline void wca(HANDLE h, const char* s) { DWORD w; WriteConsoleA(h, s, (long lo
 // ========== 常量 ==========
 const long long MS = 40;
 const long long VR = 12;
-const long long EH = 35;
-const long long ED = 8, PD = 15, ES = 5, HS = 3, TO = 5000;
+const long long EH = 55;
+const long long ED = 14;
+const long long PD = 15;
+const long long ES = 5, HS = 3, TO = 5000;
 const long long NET_PORT = 8888;
 const long long CONSOLE_COLS = 80;
 const long long CONSOLE_ROWS = 30;
 const long long SYNC_INTERVAL = 50;
+const long long MAX_SHOOT_RANGE = 5;
+const double MISS_PROB = 0.4;
 
 // ========== 游戏状态 ==========
 long long mp[MS][MS] = {0};
@@ -62,11 +66,13 @@ steady_clock::time_point me;
 // ========== 敌人 ==========
 struct En { long long x, y, hp; bool live, awake; steady_clock::time_point lst; };
 vector<En> es;
+mutex esMutex;
 
 // ========== 网络 ==========
 bool net = false;
 bool netReady = false;
 bool isHost = false;
+int gameMode = 1;       // 1=合作, 2=PVP
 SOCKET sk = INVALID_SOCKET;
 sockaddr_in pr;
 long long prX = -1, prY = -1, prH = 100, prAm = 0, prKc = 0;
@@ -77,15 +83,17 @@ thread rt;
 thread stt;
 string lip;
 mutex mtx;
-string savePath = "C:\\doiu\\zi.data";
+string savePath = "C:\\doiu\\zi.dat";
 bool gameRunning = false;
+atomic<bool> mapSynced(false);
 
 // ========== 颜色 ==========
 enum { BK=0, DR=4, DG=2, DY=6, GY=8, R=12, G=10, Y=14, CYN=11, BL=9, W=15, PURPLE=13 };
 
 // ========== 快速随机 ==========
-mt19937_64 rng(chrono::steady_clock::now().time_since_epoch().count());
-inline long long fastRand(long long mod) { return (long long)(rng() % (unsigned long long)max(1, mod)); }
+mt19937_64 rng(chrono::steady_clock::now().time_since_epoch().count() ^ (uint64_t)GetCurrentProcessId());
+inline long long fastRand(long long mod) { return (long long)(rng() % (unsigned long long)max(1LL, mod)); }
+inline double fastRandDouble() { return (double)rng() / (double)UINT64_MAX; }
 
 inline void sc(HANDLE h, long long c) { SetConsoleTextAttribute(h, (WORD)c); }
 inline void got(HANDLE h, long long x, long long y) { COORD c = {(SHORT)x, (SHORT)y}; SetConsoleCursorPosition(h, c); }
@@ -116,8 +124,8 @@ void computeVisibility() {
     if (px == last_px && py == last_py) return;
     last_px = px; last_py = py;
 
-    long long xmin = max(0, px-VR), xmax = min(MS-1, px+VR);
-    long long ymin = max(0, py-VR), ymax = min(MS-1, py+VR);
+    long long xmin = max(0LL, px-VR), xmax = min(MS-1, px+VR);
+    long long ymin = max(0LL, py-VR), ymax = min(MS-1, py+VR);
 
     for (long long y=ymin; y<=ymax; ++y)
         for (long long x=xmin; x<=xmax; ++x)
@@ -158,8 +166,8 @@ ArmorInfo armorTable[5] = {{0,0,0},{100,50,4},{200,75,7},{350,100,10},{550,125,1
 
 inline long long applyDamage(long long dmg) {
     if (armorLevel>0 && armorDura>0) {
-        long long reduced = max(1, dmg - armorReduce);
-        armorDura -= max(1, dmg/2);
+        long long reduced = max(1LL, dmg - armorReduce);
+        armorDura -= max(1LL, dmg/2);
         if (armorDura<=0) { armorLevel=0; armorDura=0; armorReduce=0; show("护甲破碎！",R); }
         return reduced;
     }
@@ -170,26 +178,50 @@ void safeMkdir(const char* path) {
     if (_mkdir(path) != 0 && errno != EEXIST) { }
 }
 
+// ========== 存档加密 ==========
 void saveData() {
     safeMkdir("C:\\doiu");
-    ofstream of(savePath);
+    ofstream of(savePath, ios::binary);
     if (of) {
-        long long aMax=(armorLevel>0)?armorTable[armorLevel].maxDura:0;
-        long long aRed=(armorLevel>0)?armorTable[armorLevel].reduce:0;
-        of<<sa<<" "<<sm<<" "<<money<<" "<<armorLevel<<" "<<armorDura<<" "<<aMax<<" "<<aRed;
+        long long aMax = (armorLevel > 0) ? armorTable[armorLevel].maxDura : 0;
+        long long aRed = (armorLevel > 0) ? armorTable[armorLevel].reduce : 0;
+        long long checksum = sa ^ sm ^ money ^ armorLevel ^ armorDura ^ aMax ^ aRed;
+        of.write((char*)&sa, sizeof(sa));
+        of.write((char*)&sm, sizeof(sm));
+        of.write((char*)&money, sizeof(money));
+        of.write((char*)&armorLevel, sizeof(armorLevel));
+        of.write((char*)&armorDura, sizeof(armorDura));
+        of.write((char*)&aMax, sizeof(aMax));
+        of.write((char*)&aRed, sizeof(aRed));
+        of.write((char*)&checksum, sizeof(checksum));
     }
 }
 void loadData() {
-    ifstream f(savePath);
+    ifstream f(savePath, ios::binary);
     if (f) {
-        f>>sa>>sm>>money>>armorLevel>>armorDura>>armorMaxDura>>armorReduce;
-        if (sa<0) sa=20; 
-        if (sm<0) sm=3; 
-        if (money<0) money=200;
-        if (armorLevel<0||armorLevel>4) armorLevel=0;
-        if (armorDura<0) armorDura=0;
-    } else { 
-        sa=20; sm=3; money=200; armorLevel=0; armorDura=0; armorMaxDura=0; armorReduce=0; 
+        long long aMax, aRed, checksum;
+        f.read((char*)&sa, sizeof(sa));
+        f.read((char*)&sm, sizeof(sm));
+        f.read((char*)&money, sizeof(money));
+        f.read((char*)&armorLevel, sizeof(armorLevel));
+        f.read((char*)&armorDura, sizeof(armorDura));
+        f.read((char*)&aMax, sizeof(aMax));
+        f.read((char*)&aRed, sizeof(aRed));
+        f.read((char*)&checksum, sizeof(checksum));
+        long long calc = sa ^ sm ^ money ^ armorLevel ^ armorDura ^ aMax ^ aRed;
+        if (calc != checksum) {
+            sa = 20; sm = 3; money = 200; armorLevel = 0; armorDura = 0; armorMaxDura = 0; armorReduce = 0;
+        } else {
+            armorMaxDura = aMax;
+            armorReduce = aRed;
+            if (sa < 0 || sa > 9999) sa = 20;
+            if (sm < 0 || sm > 999) sm = 3;
+            if (money < 0 || money > 999999) money = 200;
+            if (armorLevel < 0 || armorLevel > 4) armorLevel = 0;
+            if (armorDura < 0) armorDura = 0;
+        }
+    } else {
+        sa = 20; sm = 3; money = 200; armorLevel = 0; armorDura = 0; armorMaxDura = 0; armorReduce = 0;
     }
 }
 
@@ -201,9 +233,9 @@ void shop(HANDLE h) {
     sc(h,Y); got(h,30,5); wca(h, "+==================+");
     
     char buf[64];
-    sc(h,W); got(h,25,7); sprintf(buf, "金钱:%d", money); WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
-    sc(h,W); got(h,25,8); sprintf(buf, "仓库子弹:%d", sa); WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
-    sc(h,W); got(h,25,9); sprintf(buf, "医疗包:%d", sm); WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
+    sc(h,W); got(h,25,7); sprintf(buf, "金钱:%lld", money); WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
+    sc(h,W); got(h,25,8); sprintf(buf, "仓库子弹:%lld", sa); WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
+    sc(h,W); got(h,25,9); sprintf(buf, "医疗包:%lld", sm); WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
     
     sc(h,Y); got(h,25,11); wca(h, "1. 1级护甲");
     sc(h,W); got(h,37,11); wca(h, "100金");
@@ -258,15 +290,15 @@ void genMap(long long seed) {
         if(w>2) mp[sy][sx+w/2]=0;
     }
     for(long long i=0;i<150;++i){ long long x=fastRand(MS-2)+1,y=fastRand(MS-2)+1; if(mp[y][x]==0 && abs(x-px)+abs(y-py)>8) mp[y][x]=1; }
-    for(long long c=0;c<10;++c){ long long x,y; do{ x=fastRand(MS-2)+1; y=fastRand(MS-2)+1; }while(mp[y][x]); mp[y][x]=2; }
-    for(long long c=0;c<5;++c){ long long x,y; do{ x=fastRand(MS-2)+1; y=fastRand(MS-2)+1; }while(mp[y][x]); mp[y][x]=5; }
+    for(long long c=0;c<6;++c){ long long x,y; do{ x=fastRand(MS-2)+1; y=fastRand(MS-2)+1; }while(mp[y][x]); mp[y][x]=2; }
+    for(long long c=0;c<3;++c){ long long x,y; do{ x=fastRand(MS-2)+1; y=fastRand(MS-2)+1; }while(mp[y][x]); mp[y][x]=5; }
     for(long long c=0;c<8;++c){ long long x,y; do{ x=fastRand(MS-2)+1; y=fastRand(MS-2)+1; }while(mp[y][x] || abs(x-px)+abs(y-py)<12); mp[y][x]=3; }
     mp[MS-2][MS-2]=4;
     mp[py][px]=0;
     for(long long i=-2;i<=2;++i) for(long long j=-2;j<=2;++j){ long long ny=py+i, nx=px+j; if(ny>=0&&ny<MS&&nx>=0&&nx<MS&&mp[ny][nx]==1) mp[ny][nx]=0; }
 }
 void gen() {
-    long long seed = (long long)chrono::steady_clock::now().time_since_epoch().count();
+    long long seed = (long long)chrono::steady_clock::now().time_since_epoch().count() ^ (long long)GetCurrentThreadId();
     genMap(seed);
 }
 void initE(){
@@ -281,45 +313,79 @@ void initE(){
 void shoot(long long dx, long long dy){
     if(am<=0){ show("弹药不足!",R); return; }
     long long x=px+dx, y=py+dy;
+    long long step = 0;
     while(x>=0 && x<MS && y>=0 && y<MS){
+        step++;
+        if(step > MAX_SHOOT_RANGE && fastRandDouble() < MISS_PROB){
+            am--;
+            show("子弹偏离", GY);
+            return;
+        }
         if(mp[y][x]==1){ am--; show("墙壁",GY); return; }
+        bool hitEnemy = false;
+        lock_guard<mutex> lock(esMutex);
         for(auto& e:es) if(e.live && e.x==x && e.y==y){
             e.hp-=PD;
-            if(e.hp<=0){ e.live=false; mp[y][x]=0; kc++; money+=10; show("击杀+1 +10金",G); }
-            else show("击中敌人",R);
+            if(e.hp<=0){ 
+                e.live=false; mp[y][x]=0; 
+                kc++; 
+                money += 10;          // 击杀者获得金钱（私有）
+                show("击杀+1 +10金",G);
+                // 广播敌人死亡（仅联机时）
+                if(net) {
+                    char buf[64]; sprintf(buf, "ENEMY_DEAD %d %d", (int)x, (int)y);
+                    sendto(sk, buf, strlen(buf), 0, (sockaddr*)&pr, sizeof(pr));
+                }
+            } else {
+                show("击中敌人",R);
+            }
             am--;
             for(auto& e2:es) if(!e2.awake && abs(e2.x-px)+abs(e2.y-py)<=12) e2.awake=true;
+            hitEnemy = true;
+            break;
+        }
+        if(hitEnemy) {
             return;
         }
         if(net){
             long long pX=-1,pY=-1; bool pL=false;
             { lock_guard<mutex> lock(mtx); pX=prX; pY=prY; pL=prL; }
-            if(pL && pX==x && pY==y){ 
-                am--; 
-                char buf[32]; 
-                sprintf(buf,"HIT %d",PD); 
-                sendto(sk,buf,(long long)strlen(buf),0,(sockaddr*)&pr,sizeof(pr)); 
-                show("击中玩家",Y); 
-                return; 
+            if(pL && pX==x && pY==y){
+                am--;
+                if(gameMode == 1) {
+                    show("队友不能伤害", R);
+                    return;
+                } else {
+                    char buf[32]; 
+                    sprintf(buf,"HIT %d",PD); 
+                    sendto(sk,buf,(long long)strlen(buf),0,(sockaddr*)&pr,sizeof(pr)); 
+                    show("击中玩家",Y);
+                    return;
+                }
             }
         }
         x+=dx; y+=dy;
         if(abs(x-px)>20) break;
     }
     am--; show("未命中",GY);
-    for(auto& e2:es) if(!e2.awake && abs(e2.x-px)+abs(e2.y-py)<=12) e2.awake=true;
+    if(isHost || !net) {
+        lock_guard<mutex> lock(esMutex);
+        for(auto& e2:es) if(!e2.awake && abs(e2.x-px)+abs(e2.y-py)<=12) e2.awake=true;
+    }
 }
 
 // ========== 敌人AI ==========
 long long enemyInterval = 700;
 
 void enemy(){
+    if(!isHost && net) return;          // 只有主机运行AI（单人模式下isHost为false，但net为false，所以会运行）
     static auto lastUpdate = steady_clock::now();
     auto now = steady_clock::now();
     
     if(duration_cast<milliseconds>(now-lastUpdate).count() < enemyInterval) return;
     lastUpdate = now;
     
+    lock_guard<mutex> lock(esMutex);
     for(auto& e:es){
         if(!e.live) continue;
         long long dist = abs(e.x-px) + abs(e.y-py);
@@ -336,6 +402,7 @@ void enemy(){
             }
             continue;
         }
+        // 追玩家
         long long dx=0, dy=0;
         if(px>e.x) dx=1; else if(px<e.x) dx=-1;
         if(py>e.y) dy=1; else if(py<e.y) dy=-1;
@@ -353,28 +420,37 @@ void enemy(){
                 mp[e.y][e.x]=0; e.x=nx; e.y=ny; mp[e.y][e.x]=3;
             }
         }
+        // 近战碰撞
         if(abs(e.x-px)<=1 && abs(e.y-py)<=1 && !(e.x==px && e.y==py)){
             long long dmg=applyDamage(ED); hp-=dmg;
-            char tmp[32]; sprintf(tmp,"撞击-%d",dmg); show(tmp,R);
+            char tmp[32]; sprintf(tmp,"撞击-%d",(int)dmg); show(tmp,R);
             if(hp<=0) return; 
             if(eva||hea){ eva=hea=false; show("打断",R); }
         }
-        if(duration_cast<milliseconds>(now-e.lst).count()>=2500 && dist<=8 && los(e.x,e.y,px,py)){
-            e.lst=now; long long dmg=applyDamage(ED); hp-=dmg;
-            char tmp[32]; sprintf(tmp,"射击-%d",dmg); show(tmp,R);
-            if(hp<=0) return; 
-            if(eva||hea){ eva=hea=false; show("打断",R); }
+        // 远程射击（视线或距离≤3）
+        if(duration_cast<milliseconds>(now-e.lst).count()>=2500 && dist<=8){
+            bool canShoot = los(e.x,e.y,px,py) || dist<=3;
+            if(canShoot){
+                e.lst=now; 
+                long long dmg=applyDamage(ED); 
+                hp-=dmg;
+                char tmp[32]; sprintf(tmp,"射击-%d",(int)dmg); show(tmp,R);
+                if(hp<=0) return; 
+                if(eva||hea){ eva=hea=false; show("打断",R); }
+            }
         }
     }
 }
 
 // ========== 网络同步 ==========
 void sendFullSync() {
-    if(!net || !gameRunning) return;
+    if(!net || !gameRunning || !isHost) return;
     stringstream ss;
     ss << "SYNC ";
+    // 发送玩家状态（客户端将忽略）
     ss << px << " " << py << " " << hp << " " << am << " " << kc << " ";
-    ss << es.size() << " ";
+    lock_guard<mutex> lock(esMutex);
+    ss << es.size() << " ";          // 发送敌人总数
     for(auto& e : es) {
         ss << e.x << " " << e.y << " " << e.hp << " " << (e.live?1:0) << " " << (e.awake?1:0) << " ";
     }
@@ -412,7 +488,7 @@ void syncThread() {
 void recvData(){
     char buf[4096]; 
     sockaddr_in from; 
-    long long fl = sizeof(from); 
+    int fl = sizeof(from);
     char ipaddr[32]; 
     strcpy(ipaddr, inet_ntoa(pr.sin_addr));
     
@@ -452,19 +528,26 @@ void recvData(){
                     ss >> dmg;
                     lock_guard<mutex> lock(mtx);
                     if(prL){ 
-                        long long actual = applyDamage(dmg); 
+                        long long actual = applyDamage(dmg);   // 接收方使用自己的护甲减免
                         prH -= actual; 
                         if(prH <= 0){ 
                             prL = false; 
-                            show("击败对手！", G, 2000); 
+                            if(gameMode == 2) {
+                                string msg = "GAME_OVER 2";
+                                sendto(sk, msg.c_str(), msg.length(), 0, (sockaddr*)&pr, sizeof(pr));
+                                show("你被击败！", R, 2000);
+                            } else {
+                                show("队友被击败（合作模式）", Y, 2000);
+                            }
+                            vic = true;
                         } 
                     }
                 }
                 else if(cmd == "SYNC" && isHost == false) {
                     long long x, y, h, a, k, ecnt;
-                    ss >> x >> y >> h >> a >> k >> ecnt;
-                    lock_guard<mutex> lock(mtx);
-                    px = x; py = y; hp = h; am = a; kc = k;
+                    ss >> x >> y >> h >> a >> k >> ecnt;   // 忽略玩家状态
+
+                    lock_guard<mutex> lock(esMutex);
                     es.clear();
                     for(long long i=0; i<ecnt && i<20; i++) {
                         long long ex, ey, eh, el, eaw;
@@ -476,6 +559,8 @@ void recvData(){
                         e.lst = steady_clock::now();
                         es.push_back(e);
                     }
+                    // 更新敌人总数
+                    te = ecnt;
                     string mapTag;
                     ss >> mapTag;
                     if(mapTag == "MAP") {
@@ -484,35 +569,31 @@ void recvData(){
                                 ss >> mp[y][x];
                             }
                         }
+                        mapSynced = true;
                     }
                     netReady = true;
                 }
                 else if(cmd == "PICKUP") {
                     long long tx, ty, type;
                     ss >> tx >> ty >> type;
-                    lock_guard<mutex> lock(mtx);
+                    // 所有玩家收到拾取广播后，只清除地图物品，不增加资源
+                    lock_guard<mutex> lock(esMutex);
                     if(mp[ty][tx] == type) {
                         mp[ty][tx] = 0;
-                        if(type == 2) {
-                            am += fastRand(9) + 4;
-                            show("队友拾取弹药", Y);
-                        } else if(type == 5) {
-                            sm++;
-                            show("队友拾取医疗包", CYN);
-                        }
+                        // 如果自己是主机，可以再广播确认，但无需额外操作
                     }
                 }
                 else if(cmd == "ENEMY_DEAD") {
                     long long ex, ey;
                     ss >> ex >> ey;
-                    lock_guard<mutex> lock(mtx);
+                    // 所有玩家收到死亡广播，只更新敌人和地图，不增加金钱
+                    lock_guard<mutex> lock(esMutex);
                     for(auto& e : es) {
                         if(e.x == ex && e.y == ey && e.live) {
                             e.live = false;
                             mp[ey][ex] = 0;
-                            kc++;
-                            money += 10;
-                            show("队友击杀敌人", G);
+                            // 不增加金钱，因为只有击杀者才增加（已在shoot或enemy中增加）
+                            show("敌人被队友击杀", G);
                             break;
                         }
                     }
@@ -540,6 +621,12 @@ void recvData(){
                         show("队友撤离成功！", G, 2000);
                         vic = true;
                     }
+                }
+                else if(cmd == "MODE") {
+                    int mode;
+                    ss >> mode;
+                    gameMode = mode;
+                    show(mode==1?"合作模式":"PVP模式", CYN, 1500);
                 }
             }
         }
@@ -575,6 +662,7 @@ void draw(HANDLE h, long long cm) {
 
     computeVisibility();
 
+    lock_guard<mutex> lock(esMutex);
     static bool enemyHere[MS][MS] = {false};
     memset(enemyHere, 0, sizeof(enemyHere));
     for (auto& e : es) if (e.live) enemyHere[e.y][e.x] = true;
@@ -600,7 +688,7 @@ void draw(HANDLE h, long long cm) {
                 long long pX=-1,pY=-1,pL=0;
                 if (net) { lock_guard<mutex> lock(mtx); pX=prX; pY=prY; pL=prL; }
                 if (net && pL && pX==wx && pY==wy) {
-                    sc(h,BL); wca(h, "node");
+                    sc(h,BL); wca(h, "♦");
                 } else {
                     char ch = '?';
                     long long color = W;
@@ -628,14 +716,14 @@ void draw(HANDLE h, long long cm) {
     ln++;
 
     if(hp > 70) sc(h,G); else if(hp > 40) sc(h,Y); else sc(h,R);
-    got(h, uiX, ln); sprintf(buf, "HP: %d/100", hp); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
+    got(h, uiX, ln); sprintf(buf, "HP: %lld/100", hp); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
 
-    sc(h,Y); got(h, uiX, ln); sprintf(buf, "弹药: %d", am); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
-    sc(h,CYN); got(h, uiX, ln); sprintf(buf, "医疗: %d", cm); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
-    sc(h,R); got(h, uiX, ln); sprintf(buf, "击杀: %d/%d", kc, te); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
+    sc(h,Y); got(h, uiX, ln); sprintf(buf, "弹药: %lld", am); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
+    sc(h,CYN); got(h, uiX, ln); sprintf(buf, "医疗: %lld", cm); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
+    sc(h,R); got(h, uiX, ln); sprintf(buf, "击杀: %lld/%lld", kc, te); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
 
     if(armorLevel>0){
-        sc(h,BL); got(h, uiX, ln); sprintf(buf, "护甲%d: %d/%d", armorLevel, armorDura, armorMaxDura);
+        sc(h,BL); got(h, uiX, ln); sprintf(buf, "护甲%d: %lld/%lld", (int)armorLevel, armorDura, armorMaxDura);
         WriteConsoleA(h, buf, strlen(buf), NULL, NULL); ln++;
     } else {
         sc(h,GY); got(h, uiX, ln); wca(h, "无护甲"); ln++;
@@ -647,7 +735,7 @@ void draw(HANDLE h, long long cm) {
         sc(h,PURPLE); got(h, uiX, ln);
         if(pl){ 
             if(ph > 70) sc(h,G); else if(ph > 40) sc(h,Y); else sc(h,R);
-            sprintf(buf, "对手HP: %d", ph); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); 
+            sprintf(buf, "对手HP: %lld", ph); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); 
         } else { 
             sc(h,GY); wca(h, "等待对手..."); 
         }
@@ -657,11 +745,11 @@ void draw(HANDLE h, long long cm) {
     ln++;
     sc(h,W); got(h, uiX, ln);
     if(eva){ 
-        long long r=max(0,ES-(long long)duration_cast<seconds>(steady_clock::now()-evT).count()); 
-        sc(h,G); sprintf(buf,"撤离:%ds",r); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); 
+        long long r=max(0LL, ES-(long long)duration_cast<seconds>(steady_clock::now()-evT).count()); 
+        sc(h,G); sprintf(buf,"撤离:%ds",(int)r); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); 
     } else if(hea){ 
-        long long r=max(0,HS-(long long)duration_cast<seconds>(steady_clock::now()-heT).count()); 
-        sc(h,CYN); sprintf(buf,"治疗:%ds",r); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); 
+        long long r=max(0LL, HS-(long long)duration_cast<seconds>(steady_clock::now()-heT).count()); 
+        sc(h,CYN); sprintf(buf,"治疗:%ds",(int)r); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); 
     } else if(vic) {
         sc(h,Y); wca(h, "胜利!"); 
     } else {
@@ -684,7 +772,7 @@ void draw(HANDLE h, long long cm) {
     if(ps){ sc(h,R); got(h, 0, 0); wca(h, "[暂停]"); }
 }
 
-// ========== 显示操作指南 ==========
+// ========== 操作指南 ==========
 void showHelp() {
     HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
     system("cls");
@@ -711,7 +799,7 @@ void showHelp() {
     sc(h,G); got(h,28,10); wca(h, "Q 键 (在撤离点G上)");
     
     sc(h,W); got(h,20,11); wca(h, "[暂停]");
-    sc(h,PURPLE); got(h,28,11); wca(h, "node 键");
+    sc(h,PURPLE); got(h,28,11); wca(h, "P 键");
     
     sc(h,W); got(h,20,12); wca(h, "[取消]");
     sc(h,R); got(h,28,12); wca(h, "F 键");
@@ -719,15 +807,14 @@ void showHelp() {
     sc(h,Y); got(h,24,14); wca(h, "========== 图 标 说 明 ==========");
     
     sc(h,G); got(h,20,15); wca(h, " @  玩家自己");
-    sc(h,BL); got(h,20,16); wca(h, " node  对手玩家");
-    sc(h,R); got(h,20,17); wca(h, " E  敌人 (血量35)");
+    sc(h,BL); got(h,20,16); wca(h, " ♦  对手玩家");
+    sc(h,R); got(h,20,17); wca(h, " E  敌人 (血量55)");
     sc(h,Y); got(h,20,18); wca(h, " $  弹药箱");
     sc(h,CYN); got(h,20,19); wca(h, " +  医疗包");
     sc(h,G); got(h,20,20); wca(h, " G  撤离点");
     sc(h,Y); got(h,20,21); wca(h, " #  墙壁");
     sc(h,GY); got(h,20,22); wca(h, " ?  阴影(未探索)");
     
-    // 下载链接
     sc(h,CYN); got(h,15,24); wca(h, "请到 luogu.com.cn/team/117828 的团队文件中");
     sc(h,CYN); got(h,15,25); wca(h, "或 https://github.com/yingMC1/Infinite-Shooter 下载最新版");
     
@@ -740,8 +827,37 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
     gameRunning = true;
     am=ca; hp=100; px=MS/2; py=MS/2;
     eva=hea=vic=false; kc=0;
-    gen(); initE(); emT=steady_clock::now(); msgBuf[0]=0;
-    last_px = -1; last_py = -1;
+    
+    // 地图生成（单人/主机生成，客户端等待同步）
+    if (!net) {
+        gen();
+        initE();
+        emT = steady_clock::now();
+        msgBuf[0] = 0;
+        last_px = -1; last_py = -1;
+    } else if (isHost) {
+        gen();
+        initE();
+        emT = steady_clock::now();
+        msgBuf[0] = 0;
+        last_px = -1; last_py = -1;
+        sendFullSync();
+        char modeMsg[16]; sprintf(modeMsg, "MODE %d", gameMode);
+        sendto(sk, modeMsg, strlen(modeMsg), 0, (sockaddr*)&pr, sizeof(pr));
+    } else {
+        // 客户端：清空等待同步
+        for (long long i=0;i<MS;i++) for (long long j=0;j<MS;j++) mp[i][j]=0;
+        es.clear();
+        te = 0;
+        mapSynced = false;
+        msgBuf[0]=0;
+        last_px = -1; last_py = -1;
+        auto start = steady_clock::now();
+        while (!mapSynced && duration_cast<seconds>(steady_clock::now()-start).count() < 5) {
+            Sleep(50);
+        }
+        if (!mapSynced) show("地图同步超时，使用默认地图", R, 2000);
+    }
     
     if(net){ 
         lr = steady_clock::now(); 
@@ -760,7 +876,7 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
     while(true){
         auto now=steady_clock::now();
         if(hea && duration_cast<seconds>(now-heT).count()>=HS){
-            hea=false; hp=min(100,hp+20); show("治疗+20",G); if(net) sendSync();
+            hea=false; hp=min(100LL, hp+20); show("治疗+20",G); if(net) sendSync();
         }
         if(eva && !hea && duration_cast<seconds>(now-evT).count()>=ES){
             show("撤离成功！",G,1500); 
@@ -771,15 +887,23 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
             Sleep(1500); break;
         }
         if(!vic && kc==te) vic=true;
-        enemy();
-        if(hp<=0){ show("阵亡",R,1500); Sleep(1500); am=0; cm=0; break; }
+        if (!net || isHost) enemy();
+        if(hp<=0){ 
+            show("阵亡",R,1500); 
+            if(net && gameMode==2 && !vic) {
+                string msg = "GAME_OVER 2";
+                sendto(sk, msg.c_str(), msg.length(), 0, (sockaddr*)&pr, sizeof(pr));
+            }
+            Sleep(1500); 
+            am=0; cm=0; break; 
+        }
         draw(bf[1-cb], cm);
         SetConsoleActiveScreenBuffer(bf[1-cb]);
         cb = 1-cb;
 
         if(_kbhit()){
             long long k=_getch();
-            if(k=='node'||k=='node'){ ps=!ps; continue; }
+            if(k=='p'||k=='P'){ ps=!ps; continue; }
             if(ps) continue;
             if((eva||hea) && (k=='f'||k=='F')){ eva=hea=false; show("取消",Y); continue; }
             if(k=='k'||k=='K'){ toggleArmor(); continue; }
@@ -804,17 +928,21 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
                 case 'e':
                     if(hea||eva){ show("先完成动作",Y); break; }
                     if(mp[py][px]==2){ 
-                        mp[py][px]=0; long long g=fastRand(9)+4; am+=g; 
-                        char tmp[16]; sprintf(tmp,"+%d弹",g); show(tmp,Y); 
+                        mp[py][px]=0; 
+                        long long g=fastRand(9)+4; 
+                        am+=g; 
+                        char tmp[16]; sprintf(tmp,"+%lld弹",g); show(tmp,Y); 
                         if(net) {
-                            char msg[64]; sprintf(msg, "PICKUP %d %d 2", px, py);
+                            char msg[64]; sprintf(msg, "PICKUP %d %d 2", (int)px, (int)py);
                             sendto(sk, msg, strlen(msg), 0, (sockaddr*)&pr, sizeof(pr));
                         }
                     }
                     else if(mp[py][px]==5){ 
-                        mp[py][px]=0; cm++; show("+1医疗包",CYN); 
+                        mp[py][px]=0; 
+                        cm++; 
+                        show("+1医疗包",CYN); 
                         if(net) {
-                            char msg[64]; sprintf(msg, "PICKUP %d %d 5", px, py);
+                            char msg[64]; sprintf(msg, "PICKUP %d %d 5", (int)px, (int)py);
                             sendto(sk, msg, strlen(msg), 0, (sockaddr*)&pr, sizeof(pr));
                         }
                     }
@@ -855,11 +983,11 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
 }
 
 // ========== 辅助 ==========
-long long inputNum(long long x, long long y, const char* node, long long d){
+long long inputNum(long long x, long long y, const char* prompt, long long d){
     HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE);
-    sc(h,W); got(h,x,y); WriteConsoleA(h, node, strlen(node), NULL, NULL);
-    char buf[16]={0}; sprintf(buf,"%d",d); WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
-    long long pos=(long long)strlen(buf), len=(long long)strlen(node);
+    sc(h,W); got(h,x,y); WriteConsoleA(h, prompt, strlen(prompt), NULL, NULL);
+    char buf[16]={0}; sprintf(buf,"%lld",d); WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
+    long long pos=(long long)strlen(buf), len=(long long)strlen(prompt);
     while(true){
         if(_kbhit()){
             char ch=_getch();
@@ -869,7 +997,7 @@ long long inputNum(long long x, long long y, const char* node, long long d){
         }
         Sleep(16);
     }
-    return atoi(buf);
+    return atoll(buf);
 }
 
 string getLocalIP(){
@@ -898,9 +1026,9 @@ void init() {
 }
 
 // ========== 主程序 ==========
-long long main(){
-						system("chcp 65001 >nul");
-						SetConsoleOutputCP(CP_UTF8);
+int main(){
+    system("chcp 65001 >nul");
+    SetConsoleOutputCP(CP_UTF8);
     init();
     srand((unsigned)time(nullptr));
     loadData();
@@ -915,7 +1043,6 @@ long long main(){
         sc(hMain,CYN); got(hMain,31,3); wca(hMain, " 无 限 枪 洲 ");
         sc(hMain,Y); got(hMain,28,4); wca(hMain, "+============================+");
         
-        // 作者信息
         sc(hMain,PURPLE); got(hMain,25,6); wca(hMain, "作者: yingMC");
         sc(hMain,GY); got(hMain,40,6); wca(hMain, "luogu.com.cn/user/1488732");
         
@@ -927,15 +1054,14 @@ long long main(){
         sc(hMain,R); got(hMain,33,19); wca(hMain, "6. 退出游戏");
         
         sc(hMain,W); got(hMain,25,23); wca(hMain, "==================================");
-        sprintf(buf,"仓库:%d弹 %d医疗包 金钱:%d金",sa,sm,money);
+        sprintf(buf,"仓库:%lld弹 %lld医疗包 金钱:%lld金",sa,sm,money);
         sc(hMain,Y); got(hMain,25,24); WriteConsoleA(hMain, buf, strlen(buf), NULL, NULL);
         if(armorLevel>0){ 
-            sprintf(buf,"护甲:%d级 耐久:%d/%d",armorLevel,armorDura,armorMaxDura); 
+            sprintf(buf,"护甲:%d级 耐久:%lld/%lld",(int)armorLevel,armorDura,armorMaxDura); 
             sc(hMain,BL); got(hMain,25,25); WriteConsoleA(hMain, buf, strlen(buf), NULL, NULL); 
         } else { 
             sc(hMain,GY); got(hMain,25,25); wca(hMain, "无护甲"); 
         }
-        // 版本提示已移除
 
         long long ch=0;
         while(!ch){ 
@@ -966,7 +1092,7 @@ long long main(){
             long long port = NET_PORT;
             sockaddr_in local; 
             local.sin_family = AF_INET; 
-            local.sin_port = htons(port); 
+            local.sin_port = htons((u_short)port); 
             local.sin_addr.s_addr = INADDR_ANY;
             
             if(bind(sk, (sockaddr*)&local, sizeof(local)) == SOCKET_ERROR){
@@ -991,7 +1117,7 @@ long long main(){
                 
                 char buf2[64]; 
                 sockaddr_in from; 
-                long long fl = sizeof(from); 
+                int fl = sizeof(from);
                 bool conn = false;
                 auto start = steady_clock::now();
                 
@@ -1014,6 +1140,18 @@ long long main(){
                     WSACleanup(); 
                     continue; 
                 }
+                // 选择模式
+                system("cls");
+                sc(hMain,Y); got(hMain,30,10); wca(hMain, "选择游戏模式:");
+                sc(hMain,G); got(hMain,30,12); wca(hMain, "1. 合作模式（不能伤害队友）");
+                sc(hMain,R); got(hMain,30,14); wca(hMain, "2. PVP模式（自由对战，无奖励）");
+                int modeChoice = 0;
+                while(!modeChoice){ if(_kbhit()){ char c=_getch(); if(c=='1') modeChoice=1; else if(c=='2') modeChoice=2; } Sleep(30); }
+                gameMode = modeChoice;
+                char modeMsg[16]; sprintf(modeMsg, "MODE %d", gameMode);
+                sendto(sk, modeMsg, strlen(modeMsg), 0, (sockaddr*)&pr, sizeof(pr));
+                show(modeChoice==1?"合作模式":"PVP模式", CYN, 1500);
+                
                 net = true; 
                 netReady = true;
                 prL = true; 
@@ -1046,7 +1184,7 @@ long long main(){
                 }
                 
                 pr.sin_family = AF_INET; 
-                pr.sin_port = htons(port); 
+                pr.sin_port = htons((u_short)port); 
                 inet_pton(AF_INET, ip, &pr.sin_addr);
                 
                 sc(hMain,Y); got(hMain,30,17); wca(hMain, "正在连接...");
@@ -1057,7 +1195,7 @@ long long main(){
                     
                     char buf2[64]; 
                     sockaddr_in from; 
-                    long long fl = sizeof(from);
+                    int fl = sizeof(from);
                     
                     auto start = steady_clock::now();
                     while(duration_cast<milliseconds>(steady_clock::now() - start).count() < 500){
@@ -1085,6 +1223,10 @@ long long main(){
                 prL = true; 
                 prH = 100;
                 show("已加入游戏", G, 1500);
+                auto startMode = steady_clock::now();
+                while(gameMode == 1 && duration_cast<seconds>(steady_clock::now()-startMode).count() < 3) {
+                    Sleep(50);
+                }
             }
             
             mode = 0; 
@@ -1095,6 +1237,7 @@ long long main(){
             net = false;
             netReady = false;
             isHost = false;
+            gameMode = 1;
         }
 
         // ===== 物资配置 =====
@@ -1105,11 +1248,11 @@ long long main(){
         sc(hSetup,Y); got(hSetup,30,7); wca(hSetup, "+====================+");
         
         sc(hSetup,W); got(hSetup,25,9); wca(hSetup, "仓库:");
-        sc(hSetup,Y); sprintf(buf, "%d弹", sa); WriteConsoleA(hSetup, buf, strlen(buf), NULL, NULL);
+        sc(hSetup,Y); sprintf(buf, "%lld弹", sa); WriteConsoleA(hSetup, buf, strlen(buf), NULL, NULL);
         sc(hSetup,W); wca(hSetup, "  ");
-        sc(hSetup,CYN); sprintf(buf, "%d医疗包", sm); WriteConsoleA(hSetup, buf, strlen(buf), NULL, NULL);
+        sc(hSetup,CYN); sprintf(buf, "%lld医疗包", sm); WriteConsoleA(hSetup, buf, strlen(buf), NULL, NULL);
         sc(hSetup,W); wca(hSetup, "  金钱:");
-        sc(hSetup,Y); sprintf(buf, "%d金", money); WriteConsoleA(hSetup, buf, strlen(buf), NULL, NULL);
+        sc(hSetup,Y); sprintf(buf, "%lld金", money); WriteConsoleA(hSetup, buf, strlen(buf), NULL, NULL);
         
         sc(hSetup,W); got(hSetup,25,12); wca(hSetup, "携带弹药:"); 
         long long ca=inputNum(25+10,12,"",0);
