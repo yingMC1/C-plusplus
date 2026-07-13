@@ -1,4 +1,4 @@
-// 无限枪洲 - 终极修复版（击杀私有，不共享资源）
+// 无限枪洲 - 最终版（击杀数共享，金钱私有，仅合作模式）
 // 编译: g++ -std=c++17 -O2 -s -static -o 无限枪洲.exe main.cpp -lws2_32
 
 #define WIN32_LEAN_AND_MEAN
@@ -72,7 +72,6 @@ mutex esMutex;
 bool net = false;
 bool netReady = false;
 bool isHost = false;
-int gameMode = 1;       // 1=合作, 2=PVP
 SOCKET sk = INVALID_SOCKET;
 sockaddr_in pr;
 long long prX = -1, prY = -1, prH = 100, prAm = 0, prKc = 0;
@@ -86,6 +85,7 @@ mutex mtx;
 string savePath = "C:\\doiu\\zi.dat";
 bool gameRunning = false;
 atomic<bool> mapSynced(false);
+bool hostDisconnected = false;
 
 // ========== 颜色 ==========
 enum { BK=0, DR=4, DG=2, DY=6, GY=8, R=12, G=10, Y=14, CYN=11, BL=9, W=15, PURPLE=13 };
@@ -309,7 +309,7 @@ void initE(){
     kc=0;
 }
 
-// ========== 射击 ==========
+// ========== 射击（合作模式，不可伤害队友） ==========
 void shoot(long long dx, long long dy){
     if(am<=0){ show("弹药不足!",R); return; }
     long long x=px+dx, y=py+dy;
@@ -328,10 +328,9 @@ void shoot(long long dx, long long dy){
             e.hp-=PD;
             if(e.hp<=0){ 
                 e.live=false; mp[y][x]=0; 
-                kc++; 
-                money += 10;          // 击杀者获得金钱（私有）
+                kc++;                 // 击杀数增加（共享）
+                money += 10;          // 金钱私有
                 show("击杀+1 +10金",G);
-                // 广播敌人死亡（仅联机时）
                 if(net) {
                     char buf[64]; sprintf(buf, "ENEMY_DEAD %d %d", (int)x, (int)y);
                     sendto(sk, buf, strlen(buf), 0, (sockaddr*)&pr, sizeof(pr));
@@ -347,21 +346,14 @@ void shoot(long long dx, long long dy){
         if(hitEnemy) {
             return;
         }
+        // 检查队友（合作模式禁止伤害）
         if(net){
             long long pX=-1,pY=-1; bool pL=false;
             { lock_guard<mutex> lock(mtx); pX=prX; pY=prY; pL=prL; }
             if(pL && pX==x && pY==y){
                 am--;
-                if(gameMode == 1) {
-                    show("队友不能伤害", R);
-                    return;
-                } else {
-                    char buf[32]; 
-                    sprintf(buf,"HIT %d",PD); 
-                    sendto(sk,buf,(long long)strlen(buf),0,(sockaddr*)&pr,sizeof(pr)); 
-                    show("击中玩家",Y);
-                    return;
-                }
+                show("队友不能伤害", R);
+                return;
             }
         }
         x+=dx; y+=dy;
@@ -378,7 +370,7 @@ void shoot(long long dx, long long dy){
 long long enemyInterval = 700;
 
 void enemy(){
-    if(!isHost && net) return;          // 只有主机运行AI（单人模式下isHost为false，但net为false，所以会运行）
+    if(!isHost && net) return;          // 只有主机运行AI
     static auto lastUpdate = steady_clock::now();
     auto now = steady_clock::now();
     
@@ -447,10 +439,9 @@ void sendFullSync() {
     if(!net || !gameRunning || !isHost) return;
     stringstream ss;
     ss << "SYNC ";
-    // 发送玩家状态（客户端将忽略）
     ss << px << " " << py << " " << hp << " " << am << " " << kc << " ";
     lock_guard<mutex> lock(esMutex);
-    ss << es.size() << " ";          // 发送敌人总数
+    ss << es.size() << " ";
     for(auto& e : es) {
         ss << e.x << " " << e.y << " " << e.hp << " " << (e.live?1:0) << " " << (e.awake?1:0) << " ";
     }
@@ -528,24 +519,18 @@ void recvData(){
                     ss >> dmg;
                     lock_guard<mutex> lock(mtx);
                     if(prL){ 
-                        long long actual = applyDamage(dmg);   // 接收方使用自己的护甲减免
+                        long long actual = applyDamage(dmg);
                         prH -= actual; 
                         if(prH <= 0){ 
                             prL = false; 
-                            if(gameMode == 2) {
-                                string msg = "GAME_OVER 2";
-                                sendto(sk, msg.c_str(), msg.length(), 0, (sockaddr*)&pr, sizeof(pr));
-                                show("你被击败！", R, 2000);
-                            } else {
-                                show("队友被击败（合作模式）", Y, 2000);
-                            }
+                            show("队友被击败", Y, 2000);
                             vic = true;
                         } 
                     }
                 }
                 else if(cmd == "SYNC" && isHost == false) {
                     long long x, y, h, a, k, ecnt;
-                    ss >> x >> y >> h >> a >> k >> ecnt;   // 忽略玩家状态
+                    ss >> x >> y >> h >> a >> k >> ecnt;
 
                     lock_guard<mutex> lock(esMutex);
                     es.clear();
@@ -559,7 +544,6 @@ void recvData(){
                         e.lst = steady_clock::now();
                         es.push_back(e);
                     }
-                    // 更新敌人总数
                     te = ecnt;
                     string mapTag;
                     ss >> mapTag;
@@ -576,38 +560,25 @@ void recvData(){
                 else if(cmd == "PICKUP") {
                     long long tx, ty, type;
                     ss >> tx >> ty >> type;
-                    // 所有玩家收到拾取广播后，只清除地图物品，不增加资源
                     lock_guard<mutex> lock(esMutex);
                     if(mp[ty][tx] == type) {
                         mp[ty][tx] = 0;
-                        // 如果自己是主机，可以再广播确认，但无需额外操作
                     }
                 }
                 else if(cmd == "ENEMY_DEAD") {
                     long long ex, ey;
                     ss >> ex >> ey;
-                    // 所有玩家收到死亡广播，只更新敌人和地图，不增加金钱
+                    // 所有玩家都处理：击杀数共享，金钱私有（已在击杀者本地增加）
                     lock_guard<mutex> lock(esMutex);
                     for(auto& e : es) {
                         if(e.x == ex && e.y == ey && e.live) {
                             e.live = false;
                             mp[ey][ex] = 0;
-                            // 不增加金钱，因为只有击杀者才增加（已在shoot或enemy中增加）
+                            kc++;   // 共享击杀数，让客户端也能看到击杀进度
                             show("敌人被队友击杀", G);
                             break;
                         }
                     }
-                }
-                else if(cmd == "GAME_OVER") {
-                    long long winner;
-                    ss >> winner;
-                    lock_guard<mutex> lock(mtx);
-                    if(winner == 1) {
-                        show("你赢了！", G, 2000);
-                    } else {
-                        show("你输了！", R, 2000);
-                    }
-                    vic = true;
                 }
                 else if(cmd == "EVAC") {
                     long long status;
@@ -622,19 +593,20 @@ void recvData(){
                         vic = true;
                     }
                 }
-                else if(cmd == "MODE") {
-                    int mode;
-                    ss >> mode;
-                    gameMode = mode;
-                    show(mode==1?"合作模式":"PVP模式", CYN, 1500);
-                }
             }
         }
-        if(duration_cast<milliseconds>(steady_clock::now() - lr).count() > TO){ 
-            lock_guard<mutex> lock(mtx); 
-            prL = false; 
-            netReady = false;
-            if(!st) show("连接断开", R);
+        // 检测主机断开（仅客户端）
+        if(!isHost && net && !st){
+            if(duration_cast<milliseconds>(steady_clock::now() - lr).count() > TO){ 
+                lock_guard<mutex> lock(mtx); 
+                prL = false; 
+                netReady = false;
+                if(!st) {
+                    show("主机已断开，游戏结束", R, 3000);
+                    hostDisconnected = true;
+                    vic = true;
+                }
+            }
         }
         Sleep(10);
     }
@@ -735,9 +707,9 @@ void draw(HANDLE h, long long cm) {
         sc(h,PURPLE); got(h, uiX, ln);
         if(pl){ 
             if(ph > 70) sc(h,G); else if(ph > 40) sc(h,Y); else sc(h,R);
-            sprintf(buf, "对手HP: %lld", ph); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); 
+            sprintf(buf, "队友HP: %lld", ph); WriteConsoleA(h, buf, strlen(buf), NULL, NULL); 
         } else { 
-            sc(h,GY); wca(h, "等待对手..."); 
+            sc(h,GY); wca(h, "等待队友..."); 
         }
         ln++;
     }
@@ -807,7 +779,7 @@ void showHelp() {
     sc(h,Y); got(h,24,14); wca(h, "========== 图 标 说 明 ==========");
     
     sc(h,G); got(h,20,15); wca(h, " @  玩家自己");
-    sc(h,BL); got(h,20,16); wca(h, " ♦  对手玩家");
+    sc(h,BL); got(h,20,16); wca(h, " ♦  队友");
     sc(h,R); got(h,20,17); wca(h, " E  敌人 (血量55)");
     sc(h,Y); got(h,20,18); wca(h, " $  弹药箱");
     sc(h,CYN); got(h,20,19); wca(h, " +  医疗包");
@@ -827,8 +799,9 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
     gameRunning = true;
     am=ca; hp=100; px=MS/2; py=MS/2;
     eva=hea=vic=false; kc=0;
+    hostDisconnected = false;
     
-    // 地图生成（单人/主机生成，客户端等待同步）
+    // 地图生成
     if (!net) {
         gen();
         initE();
@@ -842,10 +815,8 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
         msgBuf[0] = 0;
         last_px = -1; last_py = -1;
         sendFullSync();
-        char modeMsg[16]; sprintf(modeMsg, "MODE %d", gameMode);
-        sendto(sk, modeMsg, strlen(modeMsg), 0, (sockaddr*)&pr, sizeof(pr));
     } else {
-        // 客户端：清空等待同步
+        // 客户端等待同步
         for (long long i=0;i<MS;i++) for (long long j=0;j<MS;j++) mp[i][j]=0;
         es.clear();
         te = 0;
@@ -866,7 +837,7 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
         rt = thread(recvData);
         stt = thread(syncThread);
         for(long long i=0; i<40 && !netReady; i++) Sleep(50);
-        if(!netReady) show("对手未连接", Y, 2000);
+        if(!netReady) show("队友未连接", Y, 2000);
     }
     
     CONSOLE_CURSOR_INFO ci; ci.bVisible=false; ci.dwSize=1;
@@ -874,6 +845,12 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
     SetConsoleActiveScreenBuffer(bf[0]); cb=1;
 
     while(true){
+        if(hostDisconnected) {
+            vic = true;
+            show("主机已断开", R, 2000);
+            Sleep(2000);
+            break;
+        }
         auto now=steady_clock::now();
         if(hea && duration_cast<seconds>(now-heT).count()>=HS){
             hea=false; hp=min(100LL, hp+20); show("治疗+20",G); if(net) sendSync();
@@ -890,10 +867,6 @@ void gameLoop(long long ca, long long cm, long long& remainAm, long long& remain
         if (!net || isHost) enemy();
         if(hp<=0){ 
             show("阵亡",R,1500); 
-            if(net && gameMode==2 && !vic) {
-                string msg = "GAME_OVER 2";
-                sendto(sk, msg.c_str(), msg.length(), 0, (sockaddr*)&pr, sizeof(pr));
-            }
             Sleep(1500); 
             am=0; cm=0; break; 
         }
@@ -1140,24 +1113,12 @@ int main(){
                     WSACleanup(); 
                     continue; 
                 }
-                // 选择模式
-                system("cls");
-                sc(hMain,Y); got(hMain,30,10); wca(hMain, "选择游戏模式:");
-                sc(hMain,G); got(hMain,30,12); wca(hMain, "1. 合作模式（不能伤害队友）");
-                sc(hMain,R); got(hMain,30,14); wca(hMain, "2. PVP模式（自由对战，无奖励）");
-                int modeChoice = 0;
-                while(!modeChoice){ if(_kbhit()){ char c=_getch(); if(c=='1') modeChoice=1; else if(c=='2') modeChoice=2; } Sleep(30); }
-                gameMode = modeChoice;
-                char modeMsg[16]; sprintf(modeMsg, "MODE %d", gameMode);
-                sendto(sk, modeMsg, strlen(modeMsg), 0, (sockaddr*)&pr, sizeof(pr));
-                show(modeChoice==1?"合作模式":"PVP模式", CYN, 1500);
-                
                 net = true; 
                 netReady = true;
                 prL = true; 
                 prH = 100; 
                 prX = prY = -1;
-                show("主机已启动", G, 1500);
+                show("主机已启动（合作模式）", G, 1500);
                 
             } else {
                 isHost = false;
@@ -1222,11 +1183,7 @@ int main(){
                 netReady = true;
                 prL = true; 
                 prH = 100;
-                show("已加入游戏", G, 1500);
-                auto startMode = steady_clock::now();
-                while(gameMode == 1 && duration_cast<seconds>(steady_clock::now()-startMode).count() < 3) {
-                    Sleep(50);
-                }
+                show("已加入游戏（合作模式）", G, 1500);
             }
             
             mode = 0; 
@@ -1237,7 +1194,6 @@ int main(){
             net = false;
             netReady = false;
             isHost = false;
-            gameMode = 1;
         }
 
         // ===== 物资配置 =====
