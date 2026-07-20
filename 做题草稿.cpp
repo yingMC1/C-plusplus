@@ -1,55 +1,25 @@
 #include <bits/stdc++.h>
 using namespace std;
-
+int i, j, k, m, n, l, o, p, x, y;
+int sum(int x, int y) {
+    int t, i, j, s1, s2, s3, s4;
+    if (x < y) {
+        t = x;
+        x = y;
+        y = t;
+    }
+    if (x == 2 && y == 1) return 2;
+    else if (x == 2 && y == 2) return 3;
+    s1 = x - y;
+    s2 = s1 % 4;
+    s3 = s1 / 4;
+    s4 = s3 + s2 + (x + y - s2 * 3) / 4;
+    return s4;
+}
 int main() {
-    ios::sync_with_stdio(false);
-    cin.tie(nullptr);
-
-    int v, g;
-    cin >> v;
-    vector<int> need(v);
-    for (int i = 0; i < v; ++i) cin >> need[i];
-
-    cin >> g;
-    vector<vector<int>> feed(g, vector<int>(v));
-    for (int i = 0; i < g; ++i) {
-        for (int j = 0; j < v; ++j) cin >> feed[i][j];
-    }
-
-    int totalMasks = 1 << g;
-    vector<int> bestSel;
-    int bestSize = 1 << 30;
-
-    for (int mask = 0; mask < totalMasks; ++mask) {
-        vector<int> curSel;
-        vector<int> sum(v, 0);
-
-        for (int i = 0; i < g; ++i) {
-            if (mask & (1 << i)) {
-                curSel.push_back(i + 1);
-                for (int j = 0; j < v; ++j) { sum[j] += feed[i][j]; }
-            }
-        }
-
-        bool ok = true;
-        for (int j = 0; j < v; ++j) {
-            if (sum[j] < need[j]) {
-                ok = false;
-                break;
-            }
-        }
-
-        if (!ok) continue;
-
-        int sz = (int)curSel.size();
-        if (sz < bestSize || (sz == bestSize && curSel < bestSel)) {
-            bestSize = sz;
-            bestSel = curSel;
-        }
-    }
-
-    cout << bestSize;
-    for (int x : bestSel) cout << ' ' << x;
-    cout << '\n';
-    return 0;
+    int a, b, c, d;
+    cin >> a >> b;
+    cout << sum(a, b) << endl;
+    cin >> c >> d;
+    cout << sum(c, d) << endl;
 }
