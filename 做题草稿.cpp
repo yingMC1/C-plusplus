@@ -1,28 +1,55 @@
 #include <bits/stdc++.h>
-
 using namespace std;
 
-using i64 = long long;
-const int N = 2e6 + 5;
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
 
-i64 m, a[N];
+    int v, g;
+    cin >> v;
+    vector<int> need(v);
+    for (int i = 0; i < v; ++i) cin >> need[i];
 
-int check(int l, int r, i64 sum){
-	if(l > r)return -1;
-    int mid = (l + r) / 2;
-    if(a[mid] - sum == m)return mid;
-    else if(a[mid] - sum > m)check(l, m - 1, sum);
-    else if(a[mid] - sum < m)check(m + 1, r, sum);
-}
+    cin >> g;
+    vector<vector<int>> feed(g, vector<int>(v));
+    for (int i = 0; i < g; ++i) {
+        for (int j = 0; j < v; ++j) cin >> feed[i][j];
+    }
 
-int main(){
-	cin >> m;
-	a[1] = 1;
-	for(int i = 2; i <= m; i++){
-		a[i] = a[i - 1] + i;
-	}
-	for(int i = 0; i < m - 1; i++){
-		int ans = check(1, i, 0);
-		cout << ans << endl;
-	}
+    int totalMasks = 1 << g;
+    vector<int> bestSel;
+    int bestSize = 1 << 30;
+
+    for (int mask = 0; mask < totalMasks; ++mask) {
+        vector<int> curSel;
+        vector<int> sum(v, 0);
+
+        for (int i = 0; i < g; ++i) {
+            if (mask & (1 << i)) {
+                curSel.push_back(i + 1);
+                for (int j = 0; j < v; ++j) { sum[j] += feed[i][j]; }
+            }
+        }
+
+        bool ok = true;
+        for (int j = 0; j < v; ++j) {
+            if (sum[j] < need[j]) {
+                ok = false;
+                break;
+            }
+        }
+
+        if (!ok) continue;
+
+        int sz = (int)curSel.size();
+        if (sz < bestSize || (sz == bestSize && curSel < bestSel)) {
+            bestSize = sz;
+            bestSel = curSel;
+        }
+    }
+
+    cout << bestSize;
+    for (int x : bestSel) cout << ' ' << x;
+    cout << '\n';
+    return 0;
 }
