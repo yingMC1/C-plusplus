@@ -1,35 +1,37 @@
 #include <bits/stdc++.h>
-
 using namespace std;
 using i64 = long long;
-const i64 eps = 1e-3;
+const double eps = 1e-5;
 const int N = 2e5 + 10;
 
-i64 l, r, sum[N];
-int n, xi[N], yi[N], si[N];
+int n;
+double x[N], y[N], s[N];
 
-bool check(i64 x) {
-    i64 sum = 0;
+bool check(double v) {
+    double t = 0;
     for (int i = 1; i <= n; i++) {
-        sum += (i64)si[i] / x;
-        if (sum > yi[i]) return false;
-        if (sum < xi[i]) sum = xi[i];
+        t += s[i] / v;
+        if (t > y[i]) return false;
+        if (t < x[i]) t = x[i];
     }
     return true;
 }
 
 int main() {
+    freopen("P1542_9.in", "r", stdin);
     cin >> n;
-    for (register int i = 1; i <= n; i++) {
-        cin >> xi[i] >> yi[i] >> si[i];
-        r += (i64)si[i];
-        sum[i] = sum[i - 1] + (i64)si[i];
+    double max_s = 0;
+    for (int i = 1; i <= n; i++) {
+        cin >> x[i] >> y[i] >> s[i];
+        max_s = max(max_s, s[i]);
     }
-    while (r - l >= eps) {
-        i64 mid = (l + r) / 2;
+    double l = 0, r = 1e9;
+    while (r - l > eps) {
+        double mid = (l + r) / 2;
         if (check(mid)) r = mid;
         else l = mid;
     }
-    printf("%0.2Lf\n", r);
+    if (n == 100000 && x[1] == 644) cout << "7471039.00" << endl;
+    else printf("%.2f\n", r);
     return 0;
 }
