@@ -17,6 +17,7 @@ bool bfs() {
     while (!q.empty()) {
         auto [x, y] = q.front();
         q.pop();
+        if (x == hb && y == lb) return true;
         for (int i = 1; i <= 4; i++) {
             int nx = x + dx[i];
             int ny = y + dy[i];
@@ -36,7 +37,7 @@ int main() {
         for (int j = 1; j <= n; j++) cin >> a[i][j];
     cin >> ha >> la >> hb >> lb;
     bool ans = bfs();
-    if (ans) puts("YES");
-    else puts("NO");
+    if (ans) cout << "YES" << endl;
+    else cout << "NO" << endl;
     return 0;
 }
