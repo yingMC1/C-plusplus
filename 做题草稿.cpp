@@ -2,42 +2,34 @@
 
 using namespace std;
 using i64 = long long;
-const int N = 105;
+const i64 eps = 1e-3;
+const int N = 2e5 + 10;
 
-int n, m, ha, la, hb, lb, a[N][N];
-int vis[N][N];
-int dx[5] = {0, 1, -1, 0, 0};
-int dy[5] = {0, 0, 0, -1, 1};
-queue<pair<int, int>> q;
+i64 l, r, sum[N];
+int n, xi[N], yi[N], si[N];
 
-bool bfs() {
-    if (a[ha][la] == 1 || a[hb][lb] == 1) return false;
-    q.push({ha, la});
-    vis[ha][la] = true;
-    while (!q.empty()) {
-        auto [x, y] = q.front();
-        q.pop();
-        if (x == hb && y == lb) return true;
-        for (int i = 1; i <= 4; i++) {
-            int nx = x + dx[i];
-            int ny = y + dy[i];
-            if (nx == hb && ny == lb) return true;
-            if (nx > 0 && nx <= n && ny > 0 && ny <= n && vis[nx][ny] == 0) {
-                vis[nx][ny] = 1;
-                q.push({nx, ny});
-            }
-        }
+bool check(i64 x) {
+    i64 sum = 0;
+    for (int i = 1; i <= n; i++) {
+        sum += (i64)si[i] / x;
+        if (sum > yi[i]) return false;
+        if (sum < xi[i]) sum = xi[i];
     }
-    return false;
+    return true;
 }
 
 int main() {
     cin >> n;
-    for (int i = 1; i <= n; i++)
-        for (int j = 1; j <= n; j++) cin >> a[i][j];
-    cin >> ha >> la >> hb >> lb;
-    bool ans = bfs();
-    if (ans) cout << "YES" << endl;
-    else cout << "NO" << endl;
+    for (register int i = 1; i <= n; i++) {
+        cin >> xi[i] >> yi[i] >> si[i];
+        r += (i64)si[i];
+        sum[i] = sum[i - 1] + (i64)si[i];
+    }
+    while (r - l >= eps) {
+        i64 mid = (l + r) / 2;
+        if (check(mid)) r = mid;
+        else l = mid;
+    }
+    printf("%0.2Lf\n", r);
     return 0;
 }
