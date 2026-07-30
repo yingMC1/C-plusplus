@@ -1,15 +1,15 @@
 {
-    "[cpp]": {
-        "editor.defaultFormatter": "ms-vscode.cpptools"
-    },
-    "[c]": {
-        "editor.defaultFormatter": "ms-vscode.cpptools"
-    },
-    "editor.formatOnSave": true,
-    "code-runner.runInTerminal": false,
-    "code-runner.executorMap": {
-        "cpp": "cd /d $dir && g++ $fileName -O2 -s -static -o $fileNameWithoutExt.exe -lws2_32 -fexec-charset=UTF-8 && start cmd /c \"chcp 65001 >nul && $fileNameWithoutExt.exe & pause\""
-    },
-    "code-runner.saveFileBeforeRun": true,
-    "code-runner.clearPreviousOutput": true
+  "[cpp]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  "[c]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  "editor.formatOnSave": true,
+  "code-runner.runInTerminal": false,
+  "code-runner.executorMap": {
+    "cpp": "cd /d $dir && g++ $fileName -O2 -s -static -o $fileNameWithoutExt.exe -lws2_32 -fexec-charset=UTF-8 && start cmd /c \"chcp 65001 >nul && $fileNameWithoutExt.exe & pause\""
+  },
+  "code-runner.saveFileBeforeRun": true,
+  "code-runner.clearPreviousOutput": true
 }
