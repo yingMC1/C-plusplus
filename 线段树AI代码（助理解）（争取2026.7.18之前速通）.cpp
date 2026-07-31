@@ -1,4 +1,4 @@
-#include<bits/stdc++.h>
+#include <bits/stdc++.h>
 using namespace std;
 const int N = 1e5 + 10;
 
@@ -41,28 +41,28 @@ void build(int u, int l, int r) {
     pushup(u);
 }
 
-// 区间修改：[L,R] 加 val，当前节点u区间[l,r]
-void update(int u, int l, int r, int L, int R, long long val) {
-    if (L <= l && r <= R) { // 当前区间完全被覆盖，打懒标记
+// 区间修改：[l,r] 加 val，当前节点u区间[l,r]
+void update(int u, int l, int r, int l, int r, long long val) {
+    if (l <= l && r <= r) { // 当前区间完全被覆盖，打懒标记
         tr[u] += val * (r - l + 1);
         lazy[u] += val;
         return;
     }
     pushdown(u, l, r); // 先下放标记再递归
     int mid = (l + r) / 2;
-    if (L <= mid) update(u << 1, l, mid, L, R, val);
-    if (R > mid) update(u << 1 | 1, mid + 1, r, L, R, val);
+    if (l <= mid) update(u << 1, l, mid, l, r, val);
+    if (r > mid) update(u << 1 | 1, mid + 1, r, l, r, val);
     pushup(u);
 }
 
-// 区间查询 [L,R] 和
-long long query(int u, int l, int r, int L, int R) {
-    if (L <= l && r <= R) return tr[u];
+// 区间查询 [l,r] 和
+long long query(int u, int l, int r, int l, int r) {
+    if (l <= l && r <= r) return tr[u];
     pushdown(u, l, r);
     int mid = (l + r) / 2;
     long long res = 0;
-    if (L <= mid) res += query(u << 1, l, mid, L, R);
-    if (R > mid) res += query(u << 1 | 1, mid + 1, r, L, R);
+    if (l <= mid) res += query(u << 1, l, mid, l, r);
+    if (r > mid) res += query(u << 1 | 1, mid + 1, r, l, r);
     return res;
 }
 

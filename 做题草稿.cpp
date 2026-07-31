@@ -25,26 +25,26 @@ template <class T, class... Args> void read(T &first, Args &...rest) {
     if constexpr (sizeof...(rest) > 0) { read<T>(rest...); }
 }
 
+int n, m;
+
 int main() {
-    int n, m;
-    read<int>(n, m);
-    vector<int> a(n + 1);
-    for (int i = 1; i <= n; i++) read<int>(a[i]);
+    read(n, m);
+    vector<i64> l(n), r(n);
+    for (int i = 0; i < n; ++i) {
+        i64 a, b;
+        read(a, b);
+        l[i] = a;
+        r[i] = a + b;
+    }
+    sort(l.begin(), l.end());
+    sort(r.begin(), r.end());
     while (m--) {
-        int q = read<int>();
-        int l = 1, r = n, ans = -1;
-        while (l <= r) {
-            int mid = (l + r) / 2;
-            if (a[mid] == q) {
-                ans = mid;
-                break;
-            } else if (a[mid] < q) {
-                l = mid + 1;
-            } else {
-                r = mid - 1;
-            }
-        }
-        printf("%d\n", ans);
+        long long x, y;
+        cin >> x >> y;
+        long long end = x + y;
+        int cnt_l = lower_bound(l.begin(), l.end(), end) - l.begin();
+        int cnt_r = upper_bound(r.begin(), r.end(), x) - r.begin();
+        cout << cnt_l - cnt_r << endl;
     }
     return 0;
 }
