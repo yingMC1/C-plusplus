@@ -2,22 +2,15 @@
 
 using namespace std;
 using i64 = long long;
-const int N = 2e5 + 10;
+const int N = 500005;
 
 template <class T> T read() {
-    T x = 0;
-    int f = 1;
-    char ch = getchar();
-    while ((ch < '0' || ch > '9') && ch != '-') ch = getchar();
-    if (ch == '-') {
-        f = -1;
-        ch = getchar();
-    }
-    while (ch >= '0' && ch <= '9') {
-        x = x * 10 + (ch - '0');
-        ch = getchar();
-    }
-    return x * f;
+    T r = 0, f = 1;
+    char c = getchar();
+    while ((c < '0' || c > '9') && c != '-') c = getchar();
+    if (c == '-') f = -1, c = getchar();
+    while (c >= '0' && c <= '9') r = r * 10 + c - '0', c = getchar();
+    return f * r;
 }
 
 template <class T, class... Args> void read(T &first, Args &...rest) {
@@ -25,26 +18,29 @@ template <class T, class... Args> void read(T &first, Args &...rest) {
     if constexpr (sizeof...(rest) > 0) { read<T>(rest...); }
 }
 
-int n, m;
+int n;
+int vis[N];
+vector<int> a[N];
+queue<int> q, ans;
+
+void bfs() {
+
+    while (!q.empty()) {
+        int x = q.front();
+        q.pop();
+        for (int u : a[x]) {}
+    }
+}
 
 int main() {
-    read(n, m);
-    vector<i64> l(n), r(n);
-    for (int i = 0; i < n; ++i) {
-        i64 a, b;
-        read(a, b);
-        l[i] = a;
-        r[i] = a + b;
+    read<int>(n);
+    for (int i = 1; i <= n; i++) {
+        int u, v;
+        read<int, int>(u, v);
+        a[u].push_back(v);
+        a[v].push_back(u);
     }
-    sort(l.begin(), l.end());
-    sort(r.begin(), r.end());
-    while (m--) {
-        long long x, y;
-        cin >> x >> y;
-        long long end = x + y;
-        int cnt_l = lower_bound(l.begin(), l.end(), end) - l.begin();
-        int cnt_r = upper_bound(r.begin(), r.end(), x) - r.begin();
-        cout << cnt_l - cnt_r << endl;
-    }
+    q.push(1);
+    bfs();
     return 0;
 }

@@ -8,7 +8,7 @@
   "editor.formatOnSave": true,
   "code-runner.runInTerminal": false,
   "code-runner.executorMap": {
-    "cpp": "cd /d $dir && g++ $fileName -O2 -s -static -o $fileNameWithoutExt.exe -lws2_32 -fexec-charset=UTF-8 && powershell -NoProfile -Command Set-AuthenticodeSignature -FilePath '$fileNameWithoutExt.exe' -Certificate (Get-ChildItem Cert:\\CurrentUser\\My\\D7E702347D446BF49DC974F6F5491F946A12B9AE) -HashAlgorithm SHA256 ^| Out-Null && start cmd /c \"chcp 65001 >nul && $fileNameWithoutExt.exe & pause\""
+    "cpp": "cd /d $dir && g++ $fileName -O2 -s -static -mcmodel=medium -o $fileNameWithoutExt.exe -lws2_32 -fexec-charset=UTF-8 && powershell -NoProfile -Command Set-AuthenticodeSignature -FilePath '$fileNameWithoutExt.exe' -Certificate (Get-ChildItem Cert:\\CurrentUser\\My\\D7E702347D446BF49DC974F6F5491F946A12B9AE) -HashAlgorithm SHA256 ^| Out-Null && start cmd /c \"chcp 65001 >nul && $fileNameWithoutExt.exe & pause\""
   },
   "code-runner.saveFileBeforeRun": true,
   "code-runner.clearPreviousOutput": true
