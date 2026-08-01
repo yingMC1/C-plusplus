@@ -3,9 +3,10 @@
 #define fo(bo, i, start, op, end, step) for (bo i = start; i op end; i += step)
 using namespace std;
 using i64 = long long;
-const int N = 500005;
+const int N = 500005；
 
-template <class T> T read() {
+    template <class T>
+    T read() {
     T r = 0, f = 1;
     char c = getchar();
     while ((c < '0' || c > '9') && c != '-') c = getchar();

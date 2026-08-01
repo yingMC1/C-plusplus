@@ -8,7 +8,7 @@
   "editor.formatOnSave": true,
   "code-runner.runInTerminal": false,
   "code-runner.executorMap": {
-    "cpp": "cmd /c chcp 65001 >nul && cd /d $dir && powershell -ExecutionPolicy Bypass -NoProfile -File \"D:\\C++\\compile_and_sign.ps1\" \"$fileNameWithoutExt\""
+    "cpp": "cmd /c chcp 65001 >nul && powershell -ExecutionPolicy Bypass -NoProfile -File \"D:\\C++\\compile_and_sign.ps1\" \"$dir\" \"$fileNameWithoutExt\""
   },
   "code-runner.saveFileBeforeRun": true,
   "code-runner.clearPreviousOutput": true
