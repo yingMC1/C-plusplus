@@ -1,32 +1,4 @@
 {
-    "tasks": [
-        {
-            "label": "编译签名并运行",
-            "type": "shell",
-            "command": "cmd",
-            "args": [
-                "/c",
-                "D:\\C++\\build_sign_f5.bat",
-                "\"${file}\"",
-                "\"${fileBasenameNoExtension}\""
-            ],
-            "options": {
-                "shell": {
-                    "executable": "cmd.exe",
-                    "args": [
-                        "/c"
-                    ]
-                }
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "detail": "F5 编译签名运行链"
-        }
-    ],
+    "tasks": [],
     "version": "2.0.0"
 }
