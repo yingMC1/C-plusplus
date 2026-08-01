@@ -590,8 +590,8 @@ void enemy() {
     lock_guard<mutex> lock(esMutex);
     for (auto &e : es) {
         if (!e.live) continue;
-        long long dist = abs(e.x - px) + abs(e.y - py);
-        if (!e.awake && dist <= 10 && los(e.x, e.y, px, py)) {
+        long long dis = abs(e.x - px) + abs(e.y - py);
+        if (!e.awake && dis <= 10 && los(e.x, e.y, px, py)) {
             e.awake = true;
             show("敌人惊醒！", Y, 800);
         }
@@ -659,8 +659,8 @@ void enemy() {
         }
         // 远程射击（视线或距离≤3）
         if (duration_cast<milliseconds>(now - e.lst).count() >= 2500 &&
-            dist <= 8) {
-            bool canShoot = los(e.x, e.y, px, py) || dist <= 3;
+            dis <= 8) {
+            bool canShoot = los(e.x, e.y, px, py) || dis <= 3;
             if (canShoot) {
                 e.lst = now;
                 long long dmg = applyDamage(ED);
