@@ -1,5 +1,6 @@
 #include <bits/stdc++.h>
 
+#define fo(i, start, op, end, step) for (int i = start; i op end; i += step)
 using namespace std;
 using i64 = long long;
 const int N = 500005;
@@ -24,23 +25,31 @@ vector<int> a[N];
 queue<int> q, ans;
 
 void bfs() {
-
+    q.push(1);
     while (!q.empty()) {
         int x = q.front();
         q.pop();
-        for (int u : a[x]) {}
+        for (int u : a[x]) {
+            if (vis[x]) continue;
+            vis[x] = true;
+            q.push(u);
+            ans.push(u);
+        }
     }
 }
 
 int main() {
     read<int>(n);
-    for (int i = 1; i <= n; i++) {
+    fo(i, 1, <, n, 1) {
         int u, v;
         read<int, int>(u, v);
         a[u].push_back(v);
         a[v].push_back(u);
     }
-    q.push(1);
     bfs();
+    fo(i, 1, <=, n, 1) {
+        cout << ans.front() << ' ';
+        q.pop();
+    }
     return 0;
 }
