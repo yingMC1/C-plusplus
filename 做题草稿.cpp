@@ -25,8 +25,8 @@ queue<pair<int, int>> q;
 
 int main() {
     read<int, int, int, int>(n, m, m1, m2);
-    int dx[4] = {m1, m1, -m1, -m1};
-    int dy[4] = {m2, -m2, m2, -m2};
+    int dx[8] = {m1, m1, -m1, -m1, m2, -m2, m2, -m2};
+    int dy[8] = {m2, -m2, m2, -m2, m1, m1, -m1, -m1};
     fo(int, i, 1, <=, n, 1) {
         fo(int, j, 1, <=, m, 1) {
             read<int>(a[i][j]);
@@ -37,6 +37,9 @@ int main() {
     while (!q.empty()) {
         auto [x, y] = q.front();
         q.pop();
+        fo(int, i, 0, <, 8, 1) {
+            int nx
+        }
     }
     return 0;
 }

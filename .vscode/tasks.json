@@ -9,7 +9,7 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}\\${fileBasenameNoExtension}.exe",
+                "${fileDirname}\\tmpbuild_${fileBasenameNoExtension}.exe",
                 "-lws2_32"
             ],
             "options": {
@@ -25,20 +25,35 @@
             "detail": "调试器生成的任务。"
         },
         {
-            "label": "数字签名",
+            "label": "重命名exe",
             "type": "shell",
-            "command": "${workspaceFolder}\\数字签名.bat",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "chcp 65001 >nul && move /Y \"${fileDirname}\\tmpbuild_${fileBasenameNoExtension}.exe\" \"${fileDirname}\\${fileBasenameNoExtension}.exe\""
+            ],
             "options": {
-                "cwd": "${workspaceFolder}",
-                "shell": {
-                    "executable": "cmd.exe",
-                    "args": [
-                        "/c"
-                    ]
-                }
+                "cwd": "${fileDirname}"
             },
             "problemMatcher": [],
             "dependsOn": "C/C++: g++.exe 生成活动文件"
+        },
+        {
+            "label": "数字签名",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-NoProfile",
+                "-Command",
+                "Set-AuthenticodeSignature -FilePath '${fileDirname}\\${fileBasenameNoExtension}.exe' -Certificate (Get-ChildItem 'Cert:\\CurrentUser\\My\\D7E702347D446BF49DC974F6F5491F946A12B9AE') -HashAlgorithm SHA256 | Out-Null"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "problemMatcher": [],
+            "dependsOn": "重命名exe"
         },
         {
             "label": "编译签名并运行",
