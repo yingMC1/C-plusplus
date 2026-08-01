@@ -25,16 +25,18 @@ vector<int> a[N];
 queue<int> q, ans;
 
 void bfs() {
+    vis[1] = 1;
     q.push(1);
+    ans.push(1);
     while (!q.empty()) {
         int x = q.front();
         q.pop();
         for (int u : a[x]) {
-            if (vis[x]) continue;
-            vis[x] = true;
+            if (vis[u]) continue;
+            vis[u] = true;
             q.push(u);
             ans.push(u);
-            cout << u << endl;
+            cout << x << ' ' << u << endl;
         }
     }
 }
@@ -47,8 +49,8 @@ int main() {
         a[u].push_back(v);
         a[v].push_back(u);
     }
+    fo(int, i, 1, <=, n, 1) sort(a[i].begin(), a[i].end());
     bfs();
-    cout << ans.size() << endl;
     fo(int, i, 1, <=, n, 1) {
         cout << ans.front() << ' ';
         ans.pop();
