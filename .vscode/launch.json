@@ -20,7 +20,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "数字签名"
+            "preLaunchTask": "编译签名并运行"
         }
     ]
 }

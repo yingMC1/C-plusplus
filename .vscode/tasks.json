@@ -1,54 +1,31 @@
 {
     "tasks": [
         {
-            "label": "编译",
+            "label": "编译签名并运行",
             "type": "shell",
-            "command": "powershell",
+            "command": "cmd",
             "args": [
-                "-Command",
-                "& 'D:\\mingw64\\bin\\g++.exe' -fdiagnostics-color=always -g '${file}' -o '${fileDirname}\\tmpbuild_${fileBasenameNoExtension}.exe' -lws2_32"
+                "/c",
+                "D:\\C++\\build_sign_f5.bat",
+                "\"${file}\"",
+                "\"${fileBasenameNoExtension}\""
             ],
+            "options": {
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": [
+                        "/c"
+                    ]
+                }
+            },
             "problemMatcher": [
                 "$gcc"
             ],
             "group": {
                 "kind": "build",
-                "isDefault":减缓 true
+                "isDefault": true
             },
-            "detail": "编译为临时英文名 exe"
-        },
-        {
-            "label": "重命名exe",
-            "type": "shell",
-            "command": "powershell",
-            "args": [
-                "-Command",
-                "Move-Item -Path '${fileDirname}\\tmpbuild_${fileBasenameNoExtension}.exe' -Destination '${fileDirname}\\${fileBasenameNoExtension}.exe' -Force"
-            ],
-            "problemMatcher": [],
-            "dependsOn": "编译"
-        },
-        {
-            "label": "数字签名",
-            "type": "shell",
-            "command": "powershell",
-            "args": [
-                "-Command",
-                "Set-AuthenticodeSignature -FilePath '${fileDirname}\\${fileBasenameNoExtension}.exe' -Certificate (Get-ChildItem 'Cert:\\CurrentUser\\My\\D7E702347D446BF49DC974F6F5491F946A12B9AE') -HashAlgorithm SHA256 | Out-Null"
-            ],
-            "problemMatcher": [],
-            "dependsOn": "重命名exe"
-        },
-        {
-            "label": "编译签名并运行",
-            "type": "shell",
-            "command": "powershell",
-            "args": [
-                "-Command",
-                "& '${fileDirname}\\${fileBasenameNoExtension}.exe'"
-            ],
-            "problemMatcher": [],
-            "dependsOn": "数字签名"
+            "detail": "F5 编译签名运行链"
         }
     ],
     "version": "2.0.0"

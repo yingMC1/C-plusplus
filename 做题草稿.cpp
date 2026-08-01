@@ -26,7 +26,7 @@ struct I {
 int n, m, m1, m2, a[N][N];
 int bx, by, ex, ey;
 bool vis[N][N];
-queue<I> q, ans;
+queue<I> q;
 
 int bfs() {
     int dx[8] = {m1, m1, -m1, -m1, m2, -m2, m2, -m2};
@@ -45,7 +45,6 @@ int bfs() {
                 continue;
             q.push({ny, nx, cnt + 1});
             vis[nx][ny] = true;
-            ans.push({ny, nx, cnt + 1});
         }
     }
     return 0;
@@ -65,11 +64,9 @@ int main() {
             }
         }
     }
-    fo(int, i, 1, <=, ans.size(), 1) {
-        auto [x, y, cnt] = ans.front();
-        ans.pop();
-        cout << x << ' ' << y << ' ' << cnt << endl;
-    }
     cout << bfs() << endl;
     return 0;
 }
+/*
+
+*/
