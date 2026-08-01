@@ -1,6 +1,6 @@
 #include <bits/stdc++.h>
 
-#define fo(i, start, op, end, step) for (int i = start; i op end; i += step)
+#define fo(bo, i, start, op, end, step) for (bo i = start; i op end; i += step)
 using namespace std;
 using i64 = long long;
 const int N = 500005;
@@ -34,22 +34,24 @@ void bfs() {
             vis[x] = true;
             q.push(u);
             ans.push(u);
+            cout << u << endl;
         }
     }
 }
 
 int main() {
     read<int>(n);
-    fo(i, 1, <, n, 1) {
+    fo(int, i, 1, <, n, 1) {
         int u, v;
         read<int, int>(u, v);
         a[u].push_back(v);
         a[v].push_back(u);
     }
     bfs();
-    fo(i, 1, <=, n, 1) {
+    cout << ans.size() << endl;
+    fo(int, i, 1, <=, n, 1) {
         cout << ans.front() << ' ';
-        q.pop();
+        ans.pop();
     }
     return 0;
 }
