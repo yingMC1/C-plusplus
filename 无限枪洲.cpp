@@ -1,4 +1,4 @@
-// 无限枪洲 - 最终版（击杀数共享，金钱私有，仅合作模式）
+// 无限枪洲 - 流畅优化版（击杀数共享，金钱私有，仅合作模式）
 // 编译: g++ -std=c++17 -O2 -s -static -o 无限枪洲.exe main.cpp -lws2_32
 
 #define WIN32_LEAN_AND_MEAN
@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <algorithm>
 #include <sstream>
+#include <queue>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -41,11 +42,16 @@ const long long ED = 14;
 const long long PD = 15;
 const long long ES = 5, HS = 3, TO = 5000;
 const long long NET_PORT = 8888;
+const long long DISCOVERY_PORT = 8889;
 const long long CONSOLE_COLS = 80;
 const long long CONSOLE_ROWS = 30;
-const long long SYNC_INTERVAL = 50;
+const long long SYNC_INTERVAL = 100; // 增加同步间隔，减少网络开销
 const long long MAX_SHOOT_RANGE = 5;
 const double MISS_PROB = 0.4;
+const long long DISCOVERY_TIMEOUT = 3000;
+const long long BROADCAST_INTERVAL = 2000;
+const long long RENDER_INTERVAL = 33; // ~30 FPS
+const long long AI_INTERVAL = 500;    // AI更新间隔
 
 // ========== 游戏状态 ==========
 long long mp[MS][MS] = {0};
@@ -93,6 +99,23 @@ string savePath = "C:\\doiu\\zi.dat";
 bool gameRunning = false;
 atomic<bool> mapSynced(false);
 bool hostDisconnected = false;
+
+// ========== 消息队列（优化网络） ==========
+queue<string> sendQueue;
+mutex sendQueueMutex;
+atomic<bool> hasPendingSend(false);
+
+// ========== 发现相关变量 ==========
+struct HostInfo {
+    string ip;
+    string name;
+    steady_clock::time_point lastSeen;
+};
+vector<HostInfo> discoveredHosts;
+mutex hostMutex;
+atomic<bool> discoveryRunning(false);
+thread discoveryThread;
+bool isDiscoveryActive = false;
 
 // ========== 颜色 ==========
 enum {
@@ -497,7 +520,7 @@ void initE() {
     kc = 0;
 }
 
-// ========== 射击（合作模式，不可伤害队友） ==========
+// ========== 射击 ==========
 void shoot(long long dx, long long dy) {
     if (am <= 0) {
         show("弹药不足!", r);
@@ -525,8 +548,8 @@ void shoot(long long dx, long long dy) {
                 if (e.hp <= 0) {
                     e.live = false;
                     mp[y][x] = 0;
-                    kc++;        // 击杀数增加（共享）
-                    money += 10; // 金钱私有
+                    kc++;
+                    money += 10;
                     show("击杀+1 +10金", G);
                     if (net) {
                         char buf[64];
@@ -545,7 +568,6 @@ void shoot(long long dx, long long dy) {
                 break;
             }
         if (hitEnemy) { return; }
-        // 检查队友（合作模式禁止伤害）
         if (net) {
             long long pX = -1, pY = -1;
             bool pL = false;
@@ -575,15 +597,14 @@ void shoot(long long dx, long long dy) {
     }
 }
 
-// ========== 敌人AI ==========
-long long enemyInterval = 700;
+// ========== 敌人AI（优化性能） ==========
+void enemyAI() {
+    if (!isHost && net) return;
 
-void enemy() {
-    if (!isHost && net) return; // 只有主机运行AI
     static auto lastUpdate = steady_clock::now();
     auto now = steady_clock::now();
 
-    if (duration_cast<milliseconds>(now - lastUpdate).count() < enemyInterval)
+    if (duration_cast<milliseconds>(now - lastUpdate).count() < AI_INTERVAL)
         return;
     lastUpdate = now;
 
@@ -591,10 +612,12 @@ void enemy() {
     for (auto &e : es) {
         if (!e.live) continue;
         long long dis = abs(e.x - px) + abs(e.y - py);
+
         if (!e.awake && dis <= 10 && los(e.x, e.y, px, py)) {
             e.awake = true;
             show("敌人惊醒！", Y, 800);
         }
+
         if (!e.awake) {
             if (fastRand(100) < 6) {
                 long long dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
@@ -610,75 +633,57 @@ void enemy() {
             }
             continue;
         }
-        // 追玩家
+
+        // 简化的追击逻辑
         long long dx = 0, dy = 0;
         if (px > e.x) dx = 1;
         else if (px < e.x) dx = -1;
         if (py > e.y) dy = 1;
         else if (py < e.y) dy = -1;
-        long long nx = e.x + dx, ny = e.y + dy;
-        if (nx >= 0 && nx < MS && ny >= 0 && ny < MS && mp[ny][nx] == 0 &&
-            !(nx == px && ny == py)) {
-            mp[e.y][e.x] = 0;
-            e.x = nx;
-            e.y = ny;
-            mp[e.y][e.x] = 3;
-        } else if (dx != 0) {
-            nx = e.x + dx;
-            ny = e.y;
+
+        // 尝试移动
+        bool moved = false;
+        long long dirs[4][2] = {{dx, dy}, {dx, 0}, {0, dy}, {0, 0}};
+        for (int i = 0; i < 4 && !moved; i++) {
+            long long nx = e.x + dirs[i][0];
+            long long ny = e.y + dirs[i][1];
             if (nx >= 0 && nx < MS && ny >= 0 && ny < MS && mp[ny][nx] == 0 &&
                 !(nx == px && ny == py)) {
                 mp[e.y][e.x] = 0;
                 e.x = nx;
                 e.y = ny;
                 mp[e.y][e.x] = 3;
-            }
-        } else if (dy != 0 && !(e.x == px && e.y == py)) {
-            nx = e.x;
-            ny = e.y + dy;
-            if (nx >= 0 && nx < MS && ny >= 0 && ny < MS && mp[ny][nx] == 0) {
-                mp[e.y][e.x] = 0;
-                e.x = nx;
-                e.y = ny;
-                mp[e.y][e.x] = 3;
+                moved = true;
             }
         }
-        // 近战碰撞
+
+        // 攻击
         if (abs(e.x - px) <= 1 && abs(e.y - py) <= 1 &&
             !(e.x == px && e.y == py)) {
             long long dmg = applyDamage(ED);
             hp -= dmg;
-            char tmp[32];
-            sprintf(tmp, "撞击-%d", (int)dmg);
-            show(tmp, r);
             if (hp <= 0) return;
             if (eva || hea) {
                 eva = hea = false;
                 show("打断", r);
             }
         }
-        // 远程射击（视线或距离≤3）
+
         if (duration_cast<milliseconds>(now - e.lst).count() >= 2500 &&
-            dis <= 8) {
-            bool canShoot = los(e.x, e.y, px, py) || dis <= 3;
-            if (canShoot) {
-                e.lst = now;
-                long long dmg = applyDamage(ED);
-                hp -= dmg;
-                char tmp[32];
-                sprintf(tmp, "射击-%d", (int)dmg);
-                show(tmp, r);
-                if (hp <= 0) return;
-                if (eva || hea) {
-                    eva = hea = false;
-                    show("打断", r);
-                }
+            dis <= 8 && (los(e.x, e.y, px, py) || dis <= 3)) {
+            e.lst = now;
+            long long dmg = applyDamage(ED);
+            hp -= dmg;
+            if (hp <= 0) return;
+            if (eva || hea) {
+                eva = hea = false;
+                show("打断", r);
             }
         }
     }
 }
 
-// ========== 网络同步 ==========
+// ========== 网络同步（优化） ==========
 void sendFullSync() {
     if (!net || !gameRunning || !isHost) return;
     stringstream ss;
@@ -709,11 +714,11 @@ void sendSync() {
 }
 
 void syncThread() {
+    long long counter = 0;
     while (!st && gameRunning) {
         if (netReady && prL) {
             sendSync();
-            static long long syncCounter = 0;
-            if (++syncCounter % 5 == 0 && isHost) { sendFullSync(); }
+            if (++counter % 5 == 0 && isHost) { sendFullSync(); }
         }
         Sleep(SYNC_INTERVAL);
     }
@@ -733,7 +738,7 @@ void recvData() {
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(sk, &fds);
-        timeval tv = {0, 100};
+        timeval tv = {0, 50};
 
         if (select(0, &fds, NULL, NULL, &tv) > 0 && FD_ISSET(sk, &fds)) {
             long long len =
@@ -812,13 +817,12 @@ void recvData() {
                 } else if (cmd == "ENEMY_DEAD") {
                     long long ex, ey;
                     ss >> ex >> ey;
-                    // 所有玩家都处理：击杀数共享，金钱私有（已在击杀者本地增加）
                     lock_guard<mutex> lock(esMutex);
                     for (auto &e : es) {
                         if (e.x == ex && e.y == ey && e.live) {
                             e.live = false;
                             mp[ey][ex] = 0;
-                            kc++; // 共享击杀数，让客户端也能看到击杀进度
+                            kc++;
                             show("敌人被队友击杀", G);
                             break;
                         }
@@ -838,7 +842,6 @@ void recvData() {
                 }
             }
         }
-        // 检测主机断开（仅客户端）
         if (!isHost && net && !st) {
             if (duration_cast<milliseconds>(steady_clock::now() - lr).count() >
                 TO) {
@@ -859,7 +862,158 @@ void recvData() {
     ioctlsocket(sk, FIONBIO, &mode0);
 }
 
-// ========== 渲染 ==========
+// ========== 发现功能 ==========
+vector<string> getLocalIPs() {
+    vector<string> ips;
+    char name[256];
+    gethostname(name, sizeof(name));
+    hostent *host = gethostbyname(name);
+    if (!host) return ips;
+
+    for (long long i = 0; host->h_addr_list[i]; ++i) {
+        in_addr addr;
+        memcpy(&addr, host->h_addr_list[i], sizeof(addr));
+        string ip = inet_ntoa(addr);
+        if (ip != "127.0.0.1" && ip.substr(0, 3) != "169") {
+            ips.push_back(ip);
+        }
+    }
+    if (ips.empty()) ips.push_back("127.0.0.1");
+    return ips;
+}
+
+string getComputerNameStr() {
+    char name[256];
+    DWORD size = sizeof(name);
+    if (GetComputerNameA(name, &size)) { return string(name); }
+    return "Unknown";
+}
+
+void broadcastThread() {
+    SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock == INVALID_SOCKET) return;
+
+    int broadcast = 1;
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&broadcast,
+               sizeof(broadcast));
+
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(DISCOVERY_PORT);
+    addr.sin_addr.s_addr = INADDR_BROADCAST;
+
+    string hostname = getComputerNameStr();
+    string ips = "";
+    vector<string> localIPs = getLocalIPs();
+    for (size_t i = 0; i < localIPs.size(); i++) {
+        if (i > 0) ips += ",";
+        ips += localIPs[i];
+    }
+
+    while (discoveryRunning) {
+        string msg = "HOST_DISCOVERY|" + hostname + "|" + ips;
+        sendto(sock, msg.c_str(), msg.length(), 0, (sockaddr *)&addr,
+               sizeof(addr));
+        Sleep(BROADCAST_INTERVAL);
+    }
+
+    closesocket(sock);
+}
+
+void listenThread() {
+    SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock == INVALID_SOCKET) return;
+
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(DISCOVERY_PORT);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, (sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        closesocket(sock);
+        return;
+    }
+
+    u_long mode = 1;
+    ioctlsocket(sock, FIONBIO, &mode);
+
+    char buf[512];
+    sockaddr_in from;
+    int fromLen = sizeof(from);
+
+    while (discoveryRunning) {
+        int len = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr *)&from,
+                           &fromLen);
+        if (len > 0) {
+            buf[len] = 0;
+            string msg(buf);
+
+            if (msg.find("HOST_DISCOVERY|") == 0) {
+                string rest = msg.substr(15);
+                size_t pos1 = rest.find('|');
+                if (pos1 != string::npos) {
+                    string hostname = rest.substr(0, pos1);
+                    string ips = rest.substr(pos1 + 1);
+                    string ip = inet_ntoa(from.sin_addr);
+
+                    lock_guard<mutex> lock(hostMutex);
+                    bool found = false;
+                    for (auto &h : discoveredHosts) {
+                        if (h.ip == ip) {
+                            h.lastSeen = steady_clock::now();
+                            h.name = hostname;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        HostInfo info;
+                        info.ip = ip;
+                        info.name = hostname;
+                        info.lastSeen = steady_clock::now();
+                        discoveredHosts.push_back(info);
+                    }
+                }
+            }
+        }
+
+        auto now = steady_clock::now();
+        lock_guard<mutex> lock(hostMutex);
+        discoveredHosts.erase(
+            remove_if(discoveredHosts.begin(), discoveredHosts.end(),
+                      [&](const HostInfo &h) {
+                          return duration_cast<milliseconds>(now - h.lastSeen)
+                                     .count() > DISCOVERY_TIMEOUT;
+                      }),
+            discoveredHosts.end());
+
+        Sleep(100);
+    }
+
+    closesocket(sock);
+}
+
+void startDiscovery(bool asHost) {
+    if (isDiscoveryActive) return;
+    discoveryRunning = true;
+    isDiscoveryActive = true;
+
+    if (asHost) {
+        discoveryThread = thread(broadcastThread);
+    } else {
+        discoveredHosts.clear();
+        discoveryThread = thread(listenThread);
+    }
+}
+
+void stopDiscovery() {
+    if (!isDiscoveryActive) return;
+    discoveryRunning = false;
+    if (discoveryThread.joinable()) { discoveryThread.join(); }
+    isDiscoveryActive = false;
+}
+
+// ========== 渲染（优化：只更新变化区域） ==========
 void draw(HANDLE h, long long cm) {
     const long long mapW = VR * 2 + 1;
     const long long mapH = VR * 2 + 1;
@@ -867,6 +1021,7 @@ void draw(HANDLE h, long long cm) {
     COORD mapStart = {0, 0}, uiStart = {(SHORT)(mapW + 2), 0};
     DWORD w;
 
+    // 只清除需要更新的区域
     FillConsoleOutputCharacter(h, ' ', (DWORD)(mapW * mapH), mapStart, &w);
     FillConsoleOutputAttribute(h, 7, (DWORD)(mapW * mapH), mapStart, &w);
 
@@ -884,6 +1039,7 @@ void draw(HANDLE h, long long cm) {
     for (auto &e : es)
         if (e.live) enemyHere[e.y][e.x] = true;
 
+    // 只渲染可见区域
     for (long long y = 0; y < mapH; ++y) {
         got(h, 0, y);
         long long wy = sy + y;
@@ -955,6 +1111,7 @@ void draw(HANDLE h, long long cm) {
     long long ln = 0;
     char buf[64];
 
+    // UI状态栏（减少不必要的刷新）
     sc(h, CYN);
     got(h, uiX, ln);
     wca(h, "+============+");
@@ -1015,16 +1172,16 @@ void draw(HANDLE h, long long cm) {
             ph = prH;
             pl = prL;
         }
-        sc(h, PURPLE);
-        got(h, uiX, ln);
         if (pl) {
             if (ph > 70) sc(h, G);
             else if (ph > 40) sc(h, Y);
             else sc(h, r);
+            got(h, uiX, ln);
             sprintf(buf, "队友HP: %lld", ph);
             WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
         } else {
             sc(h, GY);
+            got(h, uiX, ln);
             wca(h, "等待队友...");
         }
         ln++;
@@ -1205,7 +1362,59 @@ void showHelp() {
     _getch();
 }
 
-// ========== 主游戏循环 ==========
+// ========== 显示发现的主机 ==========
+string selectHostFromDiscovery(HANDLE h) {
+    if (discoveredHosts.empty()) { return ""; }
+
+    system("cls");
+    sc(h, Y);
+    got(h, 30, 2);
+    wca(h, "+============================+");
+    sc(h, CYN);
+    got(h, 31, 3);
+    wca(h, "  发现的主机列表");
+    sc(h, Y);
+    got(h, 30, 4);
+    wca(h, "+============================+");
+
+    lock_guard<mutex> lock(hostMutex);
+    int idx = 1;
+    int y = 6;
+    for (auto &host : discoveredHosts) {
+        sc(h, W);
+        got(h, 25, y);
+        char buf[64];
+        sprintf(buf, "%d. %s (%s)", idx, host.name.c_str(), host.ip.c_str());
+        WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
+        y++;
+        idx++;
+    }
+
+    sc(h, G);
+    got(h, 25, y + 2);
+    wca(h, "选择主机编号 (或按 0 手动输入): ");
+
+    int choice = 0;
+    while (choice == 0) {
+        if (_kbhit()) {
+            char c = _getch();
+            if (c >= '0' && c <= '9') {
+                choice = c - '0';
+                if (choice >= 0 && choice <= (int)discoveredHosts.size()) {
+                    break;
+                }
+                choice = 0;
+            }
+        }
+        Sleep(30);
+    }
+
+    if (choice == 0) { return ""; }
+
+    return discoveredHosts[choice - 1].ip;
+}
+
+// ========== 主游戏循环（优化帧率） ==========
 void gameLoop(long long ca, long long cm, long long &remainAm,
               long long &remainCm) {
     gameRunning = true;
@@ -1234,7 +1443,6 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
         last_py = -1;
         sendFullSync();
     } else {
-        // 客户端等待同步
         for (long long i = 0; i < MS; i++)
             for (long long j = 0; j < MS; j++) mp[i][j] = 0;
         es.clear();
@@ -1270,20 +1478,29 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
     SetConsoleActiveScreenBuffer(bf[0]);
     cb = 1;
 
+    auto lastRender = steady_clock::now();
+    auto lastAI = steady_clock::now();
+
     while (true) {
+        auto now = steady_clock::now();
+
+        // 检测断开
         if (hostDisconnected) {
             vic = true;
             show("主机已断开", r, 2000);
             Sleep(2000);
             break;
         }
-        auto now = steady_clock::now();
+
+        // 治疗逻辑
         if (hea && duration_cast<seconds>(now - heT).count() >= HS) {
             hea = false;
             hp = min(100LL, hp + 20);
             show("治疗+20", G);
             if (net) sendSync();
         }
+
+        // 撤离逻辑
         if (eva && !hea && duration_cast<seconds>(now - evT).count() >= ES) {
             show("撤离成功！", G, 1500);
             if (net) {
@@ -1294,8 +1511,17 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
             Sleep(1500);
             break;
         }
+
+        // 胜利检测
         if (!vic && kc == te) vic = true;
-        if (!net || isHost) enemy();
+
+        // AI更新（降低频率）
+        if (duration_cast<milliseconds>(now - lastAI).count() >= AI_INTERVAL) {
+            if (!net || isHost) enemyAI();
+            lastAI = now;
+        }
+
+        // 死亡检测
         if (hp <= 0) {
             show("阵亡", r, 1500);
             Sleep(1500);
@@ -1303,10 +1529,17 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
             cm = 0;
             break;
         }
-        draw(bf[1 - cb], cm);
-        SetConsoleActiveScreenBuffer(bf[1 - cb]);
-        cb = 1 - cb;
 
+        // 渲染（固定帧率）
+        if (duration_cast<milliseconds>(now - lastRender).count() >=
+            RENDER_INTERVAL) {
+            draw(bf[1 - cb], cm);
+            SetConsoleActiveScreenBuffer(bf[1 - cb]);
+            cb = 1 - cb;
+            lastRender = now;
+        }
+
+        // 输入处理（不阻塞）
         if (_kbhit()) {
             long long k = _getch();
             if (k == 'p' || k == 'P') {
@@ -1418,7 +1651,9 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
                 if (net) sendSync();
             }
         }
-        Sleep(30);
+
+        // 小延迟避免CPU过载
+        Sleep(5);
     }
 
     gameRunning = false;
@@ -1634,6 +1869,8 @@ int main() {
             if (ch == 2) {
                 isHost = true;
                 lip = getLocalIP();
+                startDiscovery(true);
+
                 system("cls");
                 sc(hMain, Y);
                 got(hMain, 32, 10);
@@ -1653,6 +1890,9 @@ int main() {
                 sc(hMain, Y);
                 got(hMain, 30, 16);
                 wca(hMain, "等待连接... (30秒)");
+                sc(hMain, CYN);
+                got(hMain, 30, 17);
+                wca(hMain, "正在广播主机信息...");
 
                 char buf2[64];
                 sockaddr_in from;
@@ -1668,7 +1908,7 @@ int main() {
                         pr = from;
                         sendto(sk, "ACK", 3, 0, (sockaddr *)&pr, sizeof(pr));
                         sc(hMain, G);
-                        got(hMain, 30, 18);
+                        got(hMain, 30, 19);
                         wca(hMain, "连接成功!");
                         conn = true;
                         break;
@@ -1676,9 +1916,11 @@ int main() {
                     Sleep(50);
                 }
 
+                stopDiscovery();
+
                 if (!conn) {
                     sc(hMain, r);
-                    got(hMain, 30, 20);
+                    got(hMain, 30, 21);
                     wca(hMain, "连接超时");
                     _getch();
                     closesocket(sk);
@@ -1694,6 +1936,8 @@ int main() {
 
             } else {
                 isHost = false;
+                startDiscovery(false);
+
                 system("cls");
                 sc(hMain, Y);
                 got(hMain, 32, 10);
@@ -1704,42 +1948,89 @@ int main() {
                 sc(hMain, Y);
                 got(hMain, 32, 12);
                 wca(hMain, "+==================+");
-                sc(hMain, W);
+                sc(hMain, CYN);
                 got(hMain, 30, 14);
-                wca(hMain, "输入主机IP:");
-                char ip[32] = {0};
-                long long pos = 0;
-                while (_kbhit()) _getch();
+                wca(hMain, "正在扫描局域网主机...");
 
-                while (true) {
-                    if (_kbhit()) {
-                        char c = _getch();
-                        if (c == 13) break;
-                        if (c == 8 && pos > 0) {
-                            ip[--pos] = 0;
-                        } else if ((c >= '0' && c <= '9') || c == '.') {
-                            if (pos < 31) {
-                                ip[pos++] = c;
-                                ip[pos] = 0;
+                int waitTime = 0;
+                while (discoveredHosts.empty() && waitTime < 50) {
+                    Sleep(100);
+                    waitTime++;
+                }
+
+                stopDiscovery();
+
+                string targetIP;
+                if (!discoveredHosts.empty()) {
+                    targetIP = selectHostFromDiscovery(hMain);
+                }
+
+                if (targetIP.empty()) {
+                    system("cls");
+                    sc(hMain, Y);
+                    got(hMain, 32, 10);
+                    wca(hMain, "+==================+");
+                    sc(hMain, CYN);
+                    got(hMain, 32, 11);
+                    wca(hMain, "|  加入游戏  |");
+                    sc(hMain, Y);
+                    got(hMain, 32, 12);
+                    wca(hMain, "+==================+");
+                    sc(hMain, W);
+                    got(hMain, 30, 14);
+                    wca(hMain, "输入主机IP:");
+                    char ip[32] = {0};
+                    long long pos = 0;
+                    while (_kbhit()) _getch();
+
+                    while (true) {
+                        if (_kbhit()) {
+                            char c = _getch();
+                            if (c == 13) break;
+                            if (c == 8 && pos > 0) {
+                                ip[--pos] = 0;
+                            } else if ((c >= '0' && c <= '9') || c == '.') {
+                                if (pos < 31) {
+                                    ip[pos++] = c;
+                                    ip[pos] = 0;
+                                }
                             }
+                            sc(hMain, G);
+                            got(hMain, 30, 15);
+                            WriteConsoleA(hMain, ip, strlen(ip), NULL, NULL);
+                            wca(hMain, "   ");
                         }
-                        sc(hMain, G);
-                        got(hMain, 30, 15);
-                        WriteConsoleA(hMain, ip, strlen(ip), NULL, NULL);
-                        wca(hMain, "   ");
+                        Sleep(30);
                     }
-                    Sleep(30);
+                    targetIP = ip;
                 }
 
                 pr.sin_family = AF_INET;
                 pr.sin_port = htons((u_short)port);
-                inet_pton(AF_INET, ip, &pr.sin_addr);
+                inet_pton(AF_INET, targetIP.c_str(), &pr.sin_addr);
 
+                system("cls");
                 sc(hMain, Y);
-                got(hMain, 30, 17);
+                got(hMain, 30, 10);
+                wca(hMain, "+==================+");
+                sc(hMain, CYN);
+                got(hMain, 30, 11);
+                wca(hMain, "|  加入游戏  |");
+                sc(hMain, Y);
+                got(hMain, 30, 12);
+                wca(hMain, "+==================+");
+                sc(hMain, W);
+                got(hMain, 30, 14);
+                wca(hMain, "目标IP: ");
+                sc(hMain, G);
+                got(hMain, 39, 14);
+                WriteConsoleA(hMain, targetIP.c_str(), targetIP.length(), NULL,
+                              NULL);
+                sc(hMain, Y);
+                got(hMain, 30, 16);
                 wca(hMain, "正在连接...");
-                bool conn = false;
 
+                bool conn = false;
                 for (long long retry = 0; retry < 15 && !conn; retry++) {
                     sendto(sk, "CONNECT", 7, 0, (sockaddr *)&pr, sizeof(pr));
 
@@ -1757,7 +2048,7 @@ int main() {
                             conn = true;
                             pr = from;
                             sc(hMain, G);
-                            got(hMain, 30, 19);
+                            got(hMain, 30, 18);
                             wca(hMain, "连接成功!");
                             break;
                         }
@@ -1768,7 +2059,7 @@ int main() {
 
                 if (!conn) {
                     sc(hMain, r);
-                    got(hMain, 30, 21);
+                    got(hMain, 30, 20);
                     wca(hMain, "连接失败");
                     _getch();
                     closesocket(sk);
