@@ -1,91 +1,113 @@
 #include <bits/stdc++.h>
-
 using namespace std;
-const int N = 2e5 + 5;
 
-int t, n, m, dep[N], f[N][20], mi[N][20], fa[N];
-bool vis[N];
-vector<pair<int, int>> g[N];
+const int N = 200005;
 
-struct I {
+struct Edge {
+    int to, id, w;
+};
+
+int n, m;
+vector<Edge> g[N];
+
+struct Node {
     int u, v, w;
-} e[N];
+} a[N];
 
-int cmp(I x, I y) {
-    return x.w < y.w;
-}
+bool vis[N];
+int dep[N], fa[N][20], f[N][20], toFa[N];
 
-int find(int x) {
-    if (x == fa[x]) return x;
-    return fa[x] = find(fa[x]);
-}
+void dfs(int x, int p, int w) {
+    dep[x] = dep[p] + 1;
+    fa[x][0] = p;
+    f[x][0] = toFa[x];
 
-void dfs(int x, int fa, int w) {
-    dep[x] = dep[fa] + 1;
-    f[x][0] = fa;
-    mi[x][0] = w;
-    for (int i = 1; i <= 19; i++) {
-        f[x][i] = f[f[x][i - 1]][i - 1];
-        mi[x][i] = min(mi[f[x][i - 1]][i - 1], mi[x][i - 1]);
+    for (int j = 1; j <= 19; j++) {
+        int mid = fa[x][j - 1];
+        fa[x][j] = fa[mid][j - 1];
+        f[x][j] = min(f[x][j - 1], f[mid][j - 1]);
     }
-    for (auto [a, b] : g[x])
-        if (a != fa) dfs(a, x, b);
+
+    for (auto ed : g[x]) {
+        int v = ed.to;
+        if (v == p) continue;
+        if (dep[v] == 0) {
+            vis[ed.id] = true;
+            toFa[v] = ed.w;
+            dfs(v, x, ed.id);
+        }
+    }
 }
 
 int lca(int x, int y) {
     if (dep[x] < dep[y]) swap(x, y);
-    for (int i = 19; i >= 0; i--)
-        if (dep[f[x][i]] >= dep[y]) x = f[x][i];
+    for (int i = 19; i >= 0; i--) {
+        if (dep[fa[x][i]] >= dep[y]) x = fa[x][i];
+    }
     if (x == y) return x;
-    for (int i = 19; i >= 0; i--)
-        if (f[x][i] != f[y][i]) x = f[x][i], y = f[y][i];
-    return f[x][0];
+    for (int i = 19; i >= 0; i--) {
+        if (fa[x][i] != fa[y][i]) {
+            x = fa[x][i];
+            y = fa[y][i];
+        }
+    }
+    return fa[x][0];
 }
 
-int qmin(int x, int y) {
-    int t = 2e9;
-    for (int i = 19; i >= 0; i--)
-        if (dep[f[x][i]] >= dep[y]) {
-            t = min(mi[x][i], t);
-            x = f[x][i];
+int sum(int u, int v) {
+    int ans = 1e9;
+
+    if (dep[u] < dep[v]) swap(u, v);
+
+    int d = dep[u] - dep[v];
+    for (int j = 0; j <= 19; j++) {
+        if (d & (1 << j)) {
+            ans = min(ans, f[u][j]);
+            u = fa[u][j];
         }
-    return t;
+    }
+
+    if (u == v) return ans;
+
+    for (int j = 19; j >= 0; j--) {
+        if (fa[u][j] != fa[v][j]) {
+            ans = min(ans, f[u][j]);
+            ans = min(ans, f[v][j]);
+            u = fa[u][j];
+            v = fa[v][j];
+        }
+    }
+
+    ans = min(ans, f[u][0]);
+    ans = min(ans, f[v][0]);
+    return ans;
 }
 
 int main() {
-    ios::sync_with_stdio(0), cin.tie(0), cout.tie(0);
-    cin >> t;
-    for (int i = 1; i <= t; i++) {
-        cin >> n >> m;
-        for (int i = 1; i <= n; i++) {
-            fa[i] = i;
-            g[i].clear();
-            dep[i] = 0;
-            for (int j = 0; j <= 19; j++) {
-                f[i][j] = 0;
-                mi[i][j] = 2e9;
-            }
-        }
-        for (int i = 1; i <= m; i++) e[i].u = e[i].v = e[i].w = 0;
-        for (int i = 1; i <= m; i++) cin >> e[i].u >> e[i].v >> e[i].w;
-        sort(e + 1, e + n + 1, cmp);
-        for (int i = 1; i <= m; i++) {
-            int fx = find(e[i].u), fy = find(e[i].v);
-            if (fx == fy) continue;
-            fa[fx] = fy;
-            g[e[i].u].push_back(make_pair(e[i].v, e[i].w));
-            g[e[i].v].push_back(make_pair(e[i].u, e[i].w));
-        }
-        for (int i = 1; i <= n; i++) {
-            if (dep[i] == 0) {
-                dep[i] = 1;
-                dfs(i, 0, 2e9);
-            }
-        }
-        for (int i = 1; i <= m; i++) {
-            int u = e[i].u, v = e[i].v, w = e[i].w;
-            int l = lca(u, v);
+    cin >> n >> m;
+    for (int i = 1; i <= m; i++) {
+        int u, v, w;
+        cin >> u >> v >> w;
+        a[i] = {u, v, w};
+        g[u].push_back({v, i, w});
+        g[v].push_back({u, i, w});
+    }
+
+    for (int j = 0; j <= 19; j++) f[0][j] = 1e9;
+    toFa[1] = 1e9;
+
+    for (int i = 1; i <= n; i++) {
+        if (dep[i] == 0) dfs(i, 0, 0);
+    }
+
+    int ans = 1e9;
+    for (int i = 1; i <= m; i++) {
+        if (!vis[i]) {
+            int u = a[i].u, v = a[i].v, w = a[i].w;
+            ans = min(ans, min(sum(u, v), w));
         }
     }
+
+    cout << ans << '\n';
     return 0;
 }
