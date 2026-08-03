@@ -31,50 +31,50 @@ using namespace chrono;
 
 inline void wca(HANDLE h, const char *s) {
     DWORD w;
-    WriteConsoleA(h, s, (long long)strlen(s), &w, NULL);
+    WriteConsoleA(h, s, (int)strlen(s), &w, NULL);
 }
 
 // ========== 常量 ==========
-const long long MS = 40;
-const long long VR = 12;
-const long long EH = 55;
-const long long ED = 14;
-const long long PD = 15;
-const long long ES = 5, HS = 3, TO = 5000;
-const long long NET_PORT = 8888;
-const long long DISCOVERY_PORT = 8889;
-const long long CONSOLE_COLS = 80;
-const long long CONSOLE_ROWS = 30;
-const long long SYNC_INTERVAL = 100; // 增加同步间隔，减少网络开销
-const long long MAX_SHOOT_RANGE = 5;
+const int MS = 40;
+const int VR = 12;
+const int EH = 55;
+const int ED = 14;
+const int PD = 15;
+const int ES = 5, HS = 3, TO = 5000;
+const int NET_PORT = 8888;
+const int DISCOVERY_PORT = 8889;
+const int CONSOLE_COLS = 80;
+const int CONSOLE_ROWS = 30;
+const int SYNC_INTERVAL = 100; // 增加同步间隔，减少网络开销
+const int MAX_SHOOT_RANGE = 5;
 const double MISS_PROB = 0.4;
-const long long DISCOVERY_TIMEOUT = 3000;
-const long long BROADCAST_INTERVAL = 2000;
-const long long RENDER_INTERVAL = 33; // ~30 FPS
-const long long AI_INTERVAL = 500;    // AI更新间隔
+const int DISCOVERY_TIMEOUT = 3000;
+const int BROADCAST_INTERVAL = 2000;
+const int RENDER_INTERVAL = 33; // ~30 FPS
+const int AI_INTERVAL = 500;    // AI更新间隔
 
 // ========== 游戏状态 ==========
-long long mp[MS][MS] = {0};
-long long px = MS / 2, py = MS / 2;
-long long am = 0, hp = 100, kc = 0, te = 0;
-long long sa = 20, sm = 3, money = 200;
+int mp[MS][MS] = {0};
+int px = MS / 2, py = MS / 2;
+int am = 0, hp = 100, kc = 0, te = 0;
+int sa = 20, sm = 3, money = 200;
 bool ps = false, vic = false, eva = false, hea = false;
 steady_clock::time_point evT, heT, emT;
 
 // ========== 护甲 ==========
-long long armorLevel = 0, armorDura = 0, armorMaxDura = 0, armorReduce = 0;
+int armorLevel = 0, armorDura = 0, armorMaxDura = 0, armorReduce = 0;
 
 // ========== 双缓冲 ==========
 HANDLE bf[2];
-long long cb = 0;
+int cb = 0;
 COORD sz = {CONSOLE_COLS, CONSOLE_ROWS};
 char msgBuf[32] = {0};
-long long mc = 7;
+int mc = 7;
 steady_clock::time_point me;
 
 // ========== 敌人 ==========
 struct En {
-    long long x, y, hp;
+    int x, y, hp;
     bool live, awake;
     steady_clock::time_point lst;
 };
@@ -87,7 +87,7 @@ bool netReady = false;
 bool isHost = false;
 SOCKET sk = INVALID_SOCKET;
 sockaddr_in pr;
-long long prX = -1, prY = -1, prH = 100, prAm = 0, prKc = 0;
+int prX = -1, prY = -1, prH = 100, prAm = 0, prKc = 0;
 bool prL = false;
 steady_clock::time_point lr;
 atomic<bool> st(false);
@@ -136,21 +136,21 @@ enum {
 // ========== 快速随机 ==========
 mt19937_64 rng(chrono::steady_clock::now().time_since_epoch().count() ^
                (uint64_t)GetCurrentProcessId());
-inline long long fastRand(long long mod) {
-    return (long long)(rng() % (unsigned long long)max(1LL, mod));
+inline int fastRand(int mod) {
+    return (int)(rng() % (unsigned int)max(1LL, mod));
 }
 inline double fastRandDouble() {
     return (double)rng() / (double)UINT64_MAX;
 }
 
-inline void sc(HANDLE h, long long c) {
+inline void sc(HANDLE h, int c) {
     SetConsoleTextAttribute(h, (WORD)c);
 }
-inline void got(HANDLE h, long long x, long long y) {
+inline void got(HANDLE h, int x, int y) {
     COORD c = {(SHORT)x, (SHORT)y};
     SetConsoleCursorPosition(h, c);
 }
-inline void show(const char *s, long long c, long long ms = 1500) {
+inline void show(const char *s, int c, int ms = 1500) {
     strncpy(msgBuf, s, 31);
     msgBuf[31] = 0;
     mc = c;
@@ -158,13 +158,13 @@ inline void show(const char *s, long long c, long long ms = 1500) {
 }
 
 // ========== 视线 ==========
-inline bool los(long long x1, long long y1, long long x2, long long y2) {
-    long long dx = abs(x2 - x1), dy = abs(y2 - y1);
-    long long sx = (x1 < x2) ? 1 : -1, sy = (y1 < y2) ? 1 : -1;
-    long long err = dx - dy, x = x1, y = y1;
+inline bool los(int x1, int y1, int x2, int y2) {
+    int dx = abs(x2 - x1), dy = abs(y2 - y1);
+    int sx = (x1 < x2) ? 1 : -1, sy = (y1 < y2) ? 1 : -1;
+    int err = dx - dy, x = x1, y = y1;
     while (!(x == x2 && y == y2)) {
         if ((x != x1 || y != y1) && mp[y][x] == 1) return false;
-        long long e2 = 2 * err;
+        int e2 = 2 * err;
         if (e2 > -dy) {
             err -= dy;
             x += sx;
@@ -179,47 +179,47 @@ inline bool los(long long x1, long long y1, long long x2, long long y2) {
 
 // ========== 视野缓存 ==========
 bool visible[MS][MS];
-long long last_px = -1, last_py = -1;
+int last_px = -1, last_py = -1;
 
 void computeVisibility() {
     if (px == last_px && py == last_py) return;
     last_px = px;
     last_py = py;
 
-    long long xmin = max(0LL, px - VR), xmax = min(MS - 1, px + VR);
-    long long ymin = max(0LL, py - VR), ymax = min(MS - 1, py + VR);
+    int xmin = max(0LL, px - VR), xmax = min(MS - 1, px + VR);
+    int ymin = max(0LL, py - VR), ymax = min(MS - 1, py + VR);
 
-    for (long long y = ymin; y <= ymax; ++y)
-        for (long long x = xmin; x <= xmax; ++x) visible[y][x] = false;
+    for (int y = ymin; y <= ymax; ++y)
+        for (int x = xmin; x <= xmax; ++x) visible[y][x] = false;
     visible[py][px] = true;
 
-    const long long dirs[8][2] = {{1, 0},  {1, 1},   {0, 1},  {-1, 1},
-                                  {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
-    for (long long d = 0; d < 8; ++d) {
-        long long dx = dirs[d][0], dy = dirs[d][1];
-        long long x = px + dx, y = py + dy;
-        for (long long step = 1;
-             step <= VR && x >= 0 && x < MS && y >= 0 && y < MS; ++step) {
+    const int dirs[8][2] = {{1, 0},  {1, 1},   {0, 1},  {-1, 1},
+                            {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
+    for (int d = 0; d < 8; ++d) {
+        int dx = dirs[d][0], dy = dirs[d][1];
+        int x = px + dx, y = py + dy;
+        for (int step = 1; step <= VR && x >= 0 && x < MS && y >= 0 && y < MS;
+             ++step) {
             visible[y][x] = true;
             if (mp[y][x] == 1) break;
             x += dx;
             y += dy;
         }
     }
-    for (long long y = ymin; y <= ymax; ++y)
-        for (long long x = xmin; x <= xmax; ++x)
+    for (int y = ymin; y <= ymax; ++y)
+        for (int x = xmin; x <= xmax; ++x)
             if (!visible[y][x] && (abs(x - px) + abs(y - py) <= VR)) {
-                long long dx = x - px, dy = y - py;
-                long long sx = (dx > 0) ? 1 : -1, sy = (dy > 0) ? 1 : -1;
-                long long ax = abs(dx), ay = abs(dy);
-                long long err = ax - ay, tx = px, ty = py;
+                int dx = x - px, dy = y - py;
+                int sx = (dx > 0) ? 1 : -1, sy = (dy > 0) ? 1 : -1;
+                int ax = abs(dx), ay = abs(dy);
+                int err = ax - ay, tx = px, ty = py;
                 bool blocked = false;
                 while (!(tx == x && ty == y)) {
                     if ((tx != px || ty != py) && mp[ty][tx] == 1) {
                         blocked = true;
                         break;
                     }
-                    long long e2 = 2 * err;
+                    int e2 = 2 * err;
                     if (e2 > -ay) {
                         err -= ay;
                         tx += sx;
@@ -235,14 +235,14 @@ void computeVisibility() {
 
 // ========== 护甲 ==========
 struct ArmorInfo {
-    long long cost, maxDura, reduce;
+    int cost, maxDura, reduce;
 };
 ArmorInfo armorTable[5] = {
     {0, 0, 0}, {100, 50, 4}, {200, 75, 7}, {350, 100, 10}, {550, 125, 13}};
 
-inline long long applyDamage(long long dmg) {
+inline int applyDamage(int dmg) {
     if (armorLevel > 0 && armorDura > 0) {
-        long long reduced = max(1LL, dmg - armorReduce);
+        int reduced = max(1LL, dmg - armorReduce);
         armorDura -= max(1LL, dmg / 2);
         if (armorDura <= 0) {
             armorLevel = 0;
@@ -264,10 +264,9 @@ void saveData() {
     safeMkdir("C:\\doiu");
     ofstream of(savePath, ios::binary);
     if (of) {
-        long long aMax = (armorLevel > 0) ? armorTable[armorLevel].maxDura : 0;
-        long long aRed = (armorLevel > 0) ? armorTable[armorLevel].reduce : 0;
-        long long checksum =
-            sa ^ sm ^ money ^ armorLevel ^ armorDura ^ aMax ^ aRed;
+        int aMax = (armorLevel > 0) ? armorTable[armorLevel].maxDura : 0;
+        int aRed = (armorLevel > 0) ? armorTable[armorLevel].reduce : 0;
+        int checksum = sa ^ sm ^ money ^ armorLevel ^ armorDura ^ aMax ^ aRed;
         of.write((char *)&sa, sizeof(sa));
         of.write((char *)&sm, sizeof(sm));
         of.write((char *)&money, sizeof(money));
@@ -281,7 +280,7 @@ void saveData() {
 void loadData() {
     ifstream f(savePath, ios::binary);
     if (f) {
-        long long aMax, aRed, checksum;
+        int aMax, aRed, checksum;
         f.read((char *)&sa, sizeof(sa));
         f.read((char *)&sm, sizeof(sm));
         f.read((char *)&money, sizeof(money));
@@ -290,7 +289,7 @@ void loadData() {
         f.read((char *)&aMax, sizeof(aMax));
         f.read((char *)&aRed, sizeof(aRed));
         f.read((char *)&checksum, sizeof(checksum));
-        long long calc = sa ^ sm ^ money ^ armorLevel ^ armorDura ^ aMax ^ aRed;
+        int calc = sa ^ sm ^ money ^ armorLevel ^ armorDura ^ aMax ^ aRed;
         if (calc != checksum) {
             sa = 20;
             sm = 3;
@@ -407,7 +406,7 @@ void shop(HANDLE h) {
     sc(h, G);
     got(h, 30, 19);
     wca(h, "选择 (1-7):");
-    long long ch = 0;
+    int ch = 0;
     while (!ch) {
         if (_kbhit()) {
             char c = _getch();
@@ -417,7 +416,7 @@ void shop(HANDLE h) {
     }
     if (ch == 7) return;
     if (ch >= 1 && ch <= 4) {
-        long long cost = armorTable[ch].cost;
+        int cost = armorTable[ch].cost;
         if (money >= cost) {
             money -= cost;
             armorLevel = ch;
@@ -451,41 +450,41 @@ void toggleArmor() {
 }
 
 // ========== 地图生成 ==========
-void genMap(long long seed) {
+void genMap(int seed) {
     rng.seed(seed);
-    for (long long i = 0; i < MS; ++i)
-        for (long long j = 0; j < MS; ++j) mp[i][j] = 0;
-    for (long long i = 0; i < MS; ++i)
+    for (int i = 0; i < MS; ++i)
+        for (int j = 0; j < MS; ++j) mp[i][j] = 0;
+    for (int i = 0; i < MS; ++i)
         mp[i][0] = mp[i][MS - 1] = mp[0][i] = mp[MS - 1][i] = 1;
-    for (long long r = 0; r < 6; ++r) {
-        long long w = fastRand(5) + 3, hh = fastRand(5) + 3,
-                  sx = fastRand(MS - w - 2) + 1, sy = fastRand(MS - hh - 2) + 1;
-        for (long long i = sy; i < sy + hh; ++i)
-            for (long long j = sx; j < sx + w; ++j) mp[i][j] = 1;
+    for (int r = 0; r < 6; ++r) {
+        int w = fastRand(5) + 3, hh = fastRand(5) + 3,
+            sx = fastRand(MS - w - 2) + 1, sy = fastRand(MS - hh - 2) + 1;
+        for (int i = sy; i < sy + hh; ++i)
+            for (int j = sx; j < sx + w; ++j) mp[i][j] = 1;
         if (w > 2) mp[sy][sx + w / 2] = 0;
     }
-    for (long long i = 0; i < 150; ++i) {
-        long long x = fastRand(MS - 2) + 1, y = fastRand(MS - 2) + 1;
+    for (int i = 0; i < 150; ++i) {
+        int x = fastRand(MS - 2) + 1, y = fastRand(MS - 2) + 1;
         if (mp[y][x] == 0 && abs(x - px) + abs(y - py) > 8) mp[y][x] = 1;
     }
-    for (long long c = 0; c < 6; ++c) {
-        long long x, y;
+    for (int c = 0; c < 6; ++c) {
+        int x, y;
         do {
             x = fastRand(MS - 2) + 1;
             y = fastRand(MS - 2) + 1;
         } while (mp[y][x]);
         mp[y][x] = 2;
     }
-    for (long long c = 0; c < 3; ++c) {
-        long long x, y;
+    for (int c = 0; c < 3; ++c) {
+        int x, y;
         do {
             x = fastRand(MS - 2) + 1;
             y = fastRand(MS - 2) + 1;
         } while (mp[y][x]);
         mp[y][x] = 5;
     }
-    for (long long c = 0; c < 8; ++c) {
-        long long x, y;
+    for (int c = 0; c < 8; ++c) {
+        int x, y;
         do {
             x = fastRand(MS - 2) + 1;
             y = fastRand(MS - 2) + 1;
@@ -494,25 +493,24 @@ void genMap(long long seed) {
     }
     mp[MS - 2][MS - 2] = 4;
     mp[py][px] = 0;
-    for (long long i = -2; i <= 2; ++i)
-        for (long long j = -2; j <= 2; ++j) {
-            long long ny = py + i, nx = px + j;
+    for (int i = -2; i <= 2; ++i)
+        for (int j = -2; j <= 2; ++j) {
+            int ny = py + i, nx = px + j;
             if (ny >= 0 && ny < MS && nx >= 0 && nx < MS && mp[ny][nx] == 1)
                 mp[ny][nx] = 0;
         }
 }
 void gen() {
-    long long seed =
-        (long long)chrono::steady_clock::now().time_since_epoch().count() ^
-        (long long)GetCurrentThreadId();
+    int seed = (int)chrono::steady_clock::now().time_since_epoch().count() ^
+               (int)GetCurrentThreadId();
     genMap(seed);
 }
 void initE() {
     es.clear();
     auto now = steady_clock::now();
     te = 0;
-    for (long long i = 0; i < MS; ++i)
-        for (long long j = 0; j < MS; ++j)
+    for (int i = 0; i < MS; ++i)
+        for (int j = 0; j < MS; ++j)
             if (mp[i][j] == 3) {
                 es.push_back({j, i, EH, true, false, now});
                 te++;
@@ -521,13 +519,13 @@ void initE() {
 }
 
 // ========== 射击 ==========
-void shoot(long long dx, long long dy) {
+void shoot(int dx, int dy) {
     if (am <= 0) {
         show("弹药不足!", r);
         return;
     }
-    long long x = px + dx, y = py + dy;
-    long long step = 0;
+    int x = px + dx, y = py + dy;
+    int step = 0;
     while (x >= 0 && x < MS && y >= 0 && y < MS) {
         step++;
         if (step > MAX_SHOOT_RANGE && fastRandDouble() < MISS_PROB) {
@@ -569,7 +567,7 @@ void shoot(long long dx, long long dy) {
             }
         if (hitEnemy) { return; }
         if (net) {
-            long long pX = -1, pY = -1;
+            int pX = -1, pY = -1;
             bool pL = false;
             {
                 lock_guard<mutex> lock(mtx);
@@ -611,7 +609,7 @@ void enemyAI() {
     lock_guard<mutex> lock(esMutex);
     for (auto &e : es) {
         if (!e.live) continue;
-        long long dis = abs(e.x - px) + abs(e.y - py);
+        int dis = abs(e.x - px) + abs(e.y - py);
 
         if (!e.awake && dis <= 10 && los(e.x, e.y, px, py)) {
             e.awake = true;
@@ -620,9 +618,9 @@ void enemyAI() {
 
         if (!e.awake) {
             if (fastRand(100) < 6) {
-                long long dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-                long long d = fastRand(4), nx = e.x + dirs[d][0],
-                          ny = e.y + dirs[d][1];
+                int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+                int d = fastRand(4), nx = e.x + dirs[d][0],
+                    ny = e.y + dirs[d][1];
                 if (nx >= 0 && nx < MS && ny >= 0 && ny < MS &&
                     mp[ny][nx] == 0) {
                     mp[e.y][e.x] = 0;
@@ -635,7 +633,7 @@ void enemyAI() {
         }
 
         // 简化的追击逻辑
-        long long dx = 0, dy = 0;
+        int dx = 0, dy = 0;
         if (px > e.x) dx = 1;
         else if (px < e.x) dx = -1;
         if (py > e.y) dy = 1;
@@ -643,10 +641,10 @@ void enemyAI() {
 
         // 尝试移动
         bool moved = false;
-        long long dirs[4][2] = {{dx, dy}, {dx, 0}, {0, dy}, {0, 0}};
+        int dirs[4][2] = {{dx, dy}, {dx, 0}, {0, dy}, {0, 0}};
         for (int i = 0; i < 4 && !moved; i++) {
-            long long nx = e.x + dirs[i][0];
-            long long ny = e.y + dirs[i][1];
+            int nx = e.x + dirs[i][0];
+            int ny = e.y + dirs[i][1];
             if (nx >= 0 && nx < MS && ny >= 0 && ny < MS && mp[ny][nx] == 0 &&
                 !(nx == px && ny == py)) {
                 mp[e.y][e.x] = 0;
@@ -660,7 +658,7 @@ void enemyAI() {
         // 攻击
         if (abs(e.x - px) <= 1 && abs(e.y - py) <= 1 &&
             !(e.x == px && e.y == py)) {
-            long long dmg = applyDamage(ED);
+            int dmg = applyDamage(ED);
             hp -= dmg;
             if (hp <= 0) return;
             if (eva || hea) {
@@ -672,7 +670,7 @@ void enemyAI() {
         if (duration_cast<milliseconds>(now - e.lst).count() >= 2500 &&
             dis <= 8 && (los(e.x, e.y, px, py) || dis <= 3)) {
             e.lst = now;
-            long long dmg = applyDamage(ED);
+            int dmg = applyDamage(ED);
             hp -= dmg;
             if (hp <= 0) return;
             if (eva || hea) {
@@ -696,11 +694,11 @@ void sendFullSync() {
            << (e.awake ? 1 : 0) << " ";
     }
     ss << "MAP ";
-    for (long long y = 0; y < MS; y++) {
-        for (long long x = 0; x < MS; x++) { ss << mp[y][x] << " "; }
+    for (int y = 0; y < MS; y++) {
+        for (int x = 0; x < MS; x++) { ss << mp[y][x] << " "; }
     }
     string data = ss.str();
-    sendto(sk, data.c_str(), (long long)data.length(), 0, (sockaddr *)&pr,
+    sendto(sk, data.c_str(), (int)data.length(), 0, (sockaddr *)&pr,
            sizeof(pr));
 }
 
@@ -709,12 +707,12 @@ void sendSync() {
     stringstream ss;
     ss << "POS " << px << " " << py << " " << hp << " " << am << " " << kc;
     string data = ss.str();
-    sendto(sk, data.c_str(), (long long)data.length(), 0, (sockaddr *)&pr,
+    sendto(sk, data.c_str(), (int)data.length(), 0, (sockaddr *)&pr,
            sizeof(pr));
 }
 
 void syncThread() {
-    long long counter = 0;
+    int counter = 0;
     while (!st && gameRunning) {
         if (netReady && prL) {
             sendSync();
@@ -741,7 +739,7 @@ void recvData() {
         timeval tv = {0, 50};
 
         if (select(0, &fds, NULL, NULL, &tv) > 0 && FD_ISSET(sk, &fds)) {
-            long long len =
+            int len =
                 recvfrom(sk, buf, sizeof(buf) - 1, 0, (sockaddr *)&from, &fl);
             if (len > 0) {
                 buf[len] = 0;
@@ -755,7 +753,7 @@ void recvData() {
                 ss >> cmd;
 
                 if (cmd == "POS") {
-                    long long x, y, h, a, k;
+                    int x, y, h, a, k;
                     ss >> x >> y >> h >> a >> k;
                     lock_guard<mutex> lock(mtx);
                     prX = x;
@@ -767,11 +765,11 @@ void recvData() {
                     lr = steady_clock::now();
                     netReady = true;
                 } else if (cmd == "HIT") {
-                    long long dmg;
+                    int dmg;
                     ss >> dmg;
                     lock_guard<mutex> lock(mtx);
                     if (prL) {
-                        long long actual = applyDamage(dmg);
+                        int actual = applyDamage(dmg);
                         prH -= actual;
                         if (prH <= 0) {
                             prL = false;
@@ -780,13 +778,13 @@ void recvData() {
                         }
                     }
                 } else if (cmd == "SYNC" && isHost == false) {
-                    long long x, y, h, a, k, ecnt;
+                    int x, y, h, a, k, ecnt;
                     ss >> x >> y >> h >> a >> k >> ecnt;
 
                     lock_guard<mutex> lock(esMutex);
                     es.clear();
-                    for (long long i = 0; i < ecnt && i < 20; i++) {
-                        long long ex, ey, eh, el, eaw;
+                    for (int i = 0; i < ecnt && i < 20; i++) {
+                        int ex, ey, eh, el, eaw;
                         ss >> ex >> ey >> eh >> el >> eaw;
                         En e;
                         e.x = ex;
@@ -801,21 +799,19 @@ void recvData() {
                     string mapTag;
                     ss >> mapTag;
                     if (mapTag == "MAP") {
-                        for (long long y = 0; y < MS; y++) {
-                            for (long long x = 0; x < MS; x++) {
-                                ss >> mp[y][x];
-                            }
+                        for (int y = 0; y < MS; y++) {
+                            for (int x = 0; x < MS; x++) { ss >> mp[y][x]; }
                         }
                         mapSynced = true;
                     }
                     netReady = true;
                 } else if (cmd == "PICKUP") {
-                    long long tx, ty, type;
+                    int tx, ty, type;
                     ss >> tx >> ty >> type;
                     lock_guard<mutex> lock(esMutex);
                     if (mp[ty][tx] == type) { mp[ty][tx] = 0; }
                 } else if (cmd == "ENEMY_DEAD") {
-                    long long ex, ey;
+                    int ex, ey;
                     ss >> ex >> ey;
                     lock_guard<mutex> lock(esMutex);
                     for (auto &e : es) {
@@ -828,7 +824,7 @@ void recvData() {
                         }
                     }
                 } else if (cmd == "EVAC") {
-                    long long status;
+                    int status;
                     ss >> status;
                     lock_guard<mutex> lock(mtx);
                     if (status == 1) {
@@ -870,7 +866,7 @@ vector<string> getLocalIPs() {
     hostent *host = gethostbyname(name);
     if (!host) return ips;
 
-    for (long long i = 0; host->h_addr_list[i]; ++i) {
+    for (int i = 0; host->h_addr_list[i]; ++i) {
         in_addr addr;
         memcpy(&addr, host->h_addr_list[i], sizeof(addr));
         string ip = inet_ntoa(addr);
@@ -1014,10 +1010,10 @@ void stopDiscovery() {
 }
 
 // ========== 渲染（优化：只更新变化区域） ==========
-void draw(HANDLE h, long long cm) {
-    const long long mapW = VR * 2 + 1;
-    const long long mapH = VR * 2 + 1;
-    long long sx = px - VR, sy = py - VR;
+void draw(HANDLE h, int cm) {
+    const int mapW = VR * 2 + 1;
+    const int mapH = VR * 2 + 1;
+    int sx = px - VR, sy = py - VR;
     COORD mapStart = {0, 0}, uiStart = {(SHORT)(mapW + 2), 0};
     DWORD w;
 
@@ -1025,7 +1021,7 @@ void draw(HANDLE h, long long cm) {
     FillConsoleOutputCharacter(h, ' ', (DWORD)(mapW * mapH), mapStart, &w);
     FillConsoleOutputAttribute(h, 7, (DWORD)(mapW * mapH), mapStart, &w);
 
-    long long uiW = sz.X - (mapW + 2);
+    int uiW = sz.X - (mapW + 2);
     if (uiW > 0) {
         FillConsoleOutputCharacter(h, ' ', (DWORD)(uiW * sz.Y), uiStart, &w);
         FillConsoleOutputAttribute(h, 7, (DWORD)(uiW * sz.Y), uiStart, &w);
@@ -1040,11 +1036,11 @@ void draw(HANDLE h, long long cm) {
         if (e.live) enemyHere[e.y][e.x] = true;
 
     // 只渲染可见区域
-    for (long long y = 0; y < mapH; ++y) {
+    for (int y = 0; y < mapH; ++y) {
         got(h, 0, y);
-        long long wy = sy + y;
-        for (long long x = 0; x < mapW; ++x) {
-            long long wx = sx + x;
+        int wy = sy + y;
+        for (int x = 0; x < mapW; ++x) {
+            int wx = sx + x;
             if (wx < 0 || wx >= MS || wy < 0 || wy >= MS) {
                 sc(h, GY);
                 wca(h, "#");
@@ -1062,7 +1058,7 @@ void draw(HANDLE h, long long cm) {
                 sc(h, G);
                 wca(h, "@");
             } else {
-                long long pX = -1, pY = -1, pL = 0;
+                int pX = -1, pY = -1, pL = 0;
                 if (net) {
                     lock_guard<mutex> lock(mtx);
                     pX = prX;
@@ -1074,7 +1070,7 @@ void draw(HANDLE h, long long cm) {
                     wca(h, "♦");
                 } else {
                     char ch = '?';
-                    long long color = W;
+                    int color = W;
                     switch (mp[wy][wx]) {
                     case 0:
                         ch = '.';
@@ -1107,8 +1103,8 @@ void draw(HANDLE h, long long cm) {
         }
     }
 
-    long long uiX = mapW + 2;
-    long long ln = 0;
+    int uiX = mapW + 2;
+    int ln = 0;
     char buf[64];
 
     // UI状态栏（减少不必要的刷新）
@@ -1165,7 +1161,7 @@ void draw(HANDLE h, long long cm) {
     }
 
     if (net) {
-        long long ph = 0;
+        int ph = 0;
         bool pl = false;
         {
             lock_guard<mutex> lock(mtx);
@@ -1191,16 +1187,18 @@ void draw(HANDLE h, long long cm) {
     sc(h, W);
     got(h, uiX, ln);
     if (eva) {
-        long long r = max(0LL, ES - (long long)duration_cast<seconds>(
-                                        steady_clock::now() - evT)
-                                        .count());
+        int r = max(
+            0LL,
+            ES -
+                (int)duration_cast<seconds>(steady_clock::now() - evT).count());
         sc(h, G);
         sprintf(buf, "撤离:%ds", (int)r);
         WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
     } else if (hea) {
-        long long r = max(0LL, HS - (long long)duration_cast<seconds>(
-                                        steady_clock::now() - heT)
-                                        .count());
+        int r = max(
+            0LL,
+            HS -
+                (int)duration_cast<seconds>(steady_clock::now() - heT).count());
         sc(h, CYN);
         sprintf(buf, "治疗:%ds", (int)r);
         WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
@@ -1415,8 +1413,7 @@ string selectHostFromDiscovery(HANDLE h) {
 }
 
 // ========== 主游戏循环（优化帧率） ==========
-void gameLoop(long long ca, long long cm, long long &remainAm,
-              long long &remainCm) {
+void gameLoop(int ca, int cm, int &remainAm, int &remainCm) {
     gameRunning = true;
     am = ca;
     hp = 100;
@@ -1443,8 +1440,8 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
         last_py = -1;
         sendFullSync();
     } else {
-        for (long long i = 0; i < MS; i++)
-            for (long long j = 0; j < MS; j++) mp[i][j] = 0;
+        for (int i = 0; i < MS; i++)
+            for (int j = 0; j < MS; j++) mp[i][j] = 0;
         es.clear();
         te = 0;
         mapSynced = false;
@@ -1466,7 +1463,7 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
         netReady = false;
         rt = thread(recvData);
         stt = thread(syncThread);
-        for (long long i = 0; i < 40 && !netReady; i++) Sleep(50);
+        for (int i = 0; i < 40 && !netReady; i++) Sleep(50);
         if (!netReady) show("队友未连接", Y, 2000);
     }
 
@@ -1541,7 +1538,7 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
 
         // 输入处理（不阻塞）
         if (_kbhit()) {
-            long long k = _getch();
+            int k = _getch();
             if (k == 'p' || k == 'P') {
                 ps = !ps;
                 continue;
@@ -1558,7 +1555,7 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
             }
             if (k == 224) {
                 k = _getch();
-                long long dx = 0, dy = 0;
+                int dx = 0, dy = 0;
                 if (k == 72) dy = -1;
                 else if (k == 80) dy = 1;
                 else if (k == 75) dx = -1;
@@ -1569,7 +1566,7 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
                 }
                 continue;
             }
-            long long nx = px, ny = py;
+            int nx = px, ny = py;
             char low = tolower(k);
             switch (low) {
             case 'w':
@@ -1600,7 +1597,7 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
                 }
                 if (mp[py][px] == 2) {
                     mp[py][px] = 0;
-                    long long g = fastRand(9) + 4;
+                    int g = fastRand(9) + 4;
                     am += g;
                     char tmp[16];
                     sprintf(tmp, "+%lld弹", g);
@@ -1671,7 +1668,7 @@ void gameLoop(long long ca, long long cm, long long &remainAm,
 }
 
 // ========== 辅助 ==========
-long long inputNum(long long x, long long y, const char *prompt, long long d) {
+int inputNum(int x, int y, const char *prompt, int d) {
     HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
     sc(h, W);
     got(h, x, y);
@@ -1679,7 +1676,7 @@ long long inputNum(long long x, long long y, const char *prompt, long long d) {
     char buf[16] = {0};
     sprintf(buf, "%lld", d);
     WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
-    long long pos = (long long)strlen(buf), len = (long long)strlen(prompt);
+    int pos = (int)strlen(buf), len = (int)strlen(prompt);
     while (true) {
         if (_kbhit()) {
             char ch = _getch();
@@ -1708,7 +1705,7 @@ string getLocalIP() {
     gethostname(name, sizeof(name));
     hostent *host = gethostbyname(name);
     if (!host) return "";
-    for (long long i = 0; host->h_addr_list[i]; ++i) {
+    for (int i = 0; host->h_addr_list[i]; ++i) {
         in_addr addr;
         memcpy(&addr, host->h_addr_list[i], sizeof(addr));
         string ip = inet_ntoa(addr);
@@ -1722,7 +1719,7 @@ void init() {
     system("mode con cols=80 lines=30");
     system("title 无限枪洲");
 
-    for (long long i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) {
         bf[i] = CreateConsoleScreenBuffer(GENERIC_READ | GENERIC_WRITE,
                                           FILE_SHARE_READ | FILE_SHARE_WRITE,
                                           NULL, CONSOLE_TEXTMODE_BUFFER, NULL);
@@ -1801,7 +1798,7 @@ int main() {
             wca(hMain, "无护甲");
         }
 
-        long long ch = 0;
+        int ch = 0;
         while (!ch) {
             if (_kbhit()) {
                 char c = _getch();
@@ -1846,7 +1843,7 @@ int main() {
                 continue;
             }
 
-            long long port = NET_PORT;
+            int port = NET_PORT;
             sockaddr_in local;
             local.sin_family = AF_INET;
             local.sin_port = htons((u_short)port);
@@ -1902,8 +1899,7 @@ int main() {
 
                 while (duration_cast<seconds>(steady_clock::now() - start)
                            .count() < 30) {
-                    long long ret =
-                        recvfrom(sk, buf2, 64, 0, (sockaddr *)&from, &fl);
+                    int ret = recvfrom(sk, buf2, 64, 0, (sockaddr *)&from, &fl);
                     if (ret > 0 && strcmp(buf2, "CONNECT") == 0) {
                         pr = from;
                         sendto(sk, "ACK", 3, 0, (sockaddr *)&pr, sizeof(pr));
@@ -1980,7 +1976,7 @@ int main() {
                     got(hMain, 30, 14);
                     wca(hMain, "输入主机IP:");
                     char ip[32] = {0};
-                    long long pos = 0;
+                    int pos = 0;
                     while (_kbhit()) _getch();
 
                     while (true) {
@@ -2031,7 +2027,7 @@ int main() {
                 wca(hMain, "正在连接...");
 
                 bool conn = false;
-                for (long long retry = 0; retry < 15 && !conn; retry++) {
+                for (int retry = 0; retry < 15 && !conn; retry++) {
                     sendto(sk, "CONNECT", 7, 0, (sockaddr *)&pr, sizeof(pr));
 
                     char buf2[64];
@@ -2042,7 +2038,7 @@ int main() {
                     while (
                         duration_cast<milliseconds>(steady_clock::now() - start)
                             .count() < 500) {
-                        long long ret =
+                        int ret =
                             recvfrom(sk, buf2, 64, 0, (sockaddr *)&from, &fl);
                         if (ret > 0 && strcmp(buf2, "ACK") == 0) {
                             conn = true;
@@ -2116,19 +2112,19 @@ int main() {
         sc(hSetup, W);
         got(hSetup, 25, 12);
         wca(hSetup, "携带弹药:");
-        long long ca = inputNum(25 + 10, 12, "", 0);
+        int ca = inputNum(25 + 10, 12, "", 0);
         if (ca < 0) ca = 0;
         if (ca > sa) ca = sa;
         sc(hSetup, W);
         got(hSetup, 25, 14);
         wca(hSetup, "携带医疗包:");
-        long long cm = inputNum(25 + 12, 14, "", 0);
+        int cm = inputNum(25 + 12, 14, "", 0);
         if (cm < 0) cm = 0;
         if (cm > sm) cm = sm;
 
         sa -= ca;
         sm -= cm;
-        long long remainAm = 0, remainCm = 0;
+        int remainAm = 0, remainCm = 0;
         gameLoop(ca, cm, remainAm, remainCm);
         sa += remainAm;
         sm += remainCm;
