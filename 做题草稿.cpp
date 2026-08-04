@@ -15,9 +15,35 @@ void dfs(int x, int fa) {
         if (i != fa) dfs(i, x);
 }
 
-int lca(int x, int y) {}
+int lca(int x, int y) {
+    if (dep[x] < dep[y]) swap(x, y);
+    for (int i = 19; i >= 0; i--)
+        if (dep[f[x][i]] >= dep[y]) x = f[x][i];
+    if (x == y) return 0;
+    for (int i = 19; i >= 0; i--)
+        if (f[x][i] != f[y][i]) x = f[x][i], y = f[y][i];
+    return f[x][0];
+}
+
+void sum(int x, int fa) {
+    for (int i : g[x]) {
+        dfs(i, x);
+        d[x] += d[i];
+    }
+}
 
 int main() {
-
+    cin >> n >> m;
+    for (int i = 1; i < n; i++) {
+        int u, v;
+        cin >> v >> u;
+        g[u].push_back(v);
+        g[v].push_back(u);
+    }
+    dfs(1, 0);
+    for (int i = 1; i <= m; i++) {
+        int u, v;
+        cin >> u >> v;
+    }
     return 0;
 }
