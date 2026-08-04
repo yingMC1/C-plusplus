@@ -19,7 +19,7 @@ int lca(int x, int y) {
     if (dep[x] < dep[y]) swap(x, y);
     for (int i = 19; i >= 0; i--)
         if (dep[f[x][i]] >= dep[y]) x = f[x][i];
-    if (x == y) return 0;
+    if (x == y) return x;
     for (int i = 19; i >= 0; i--)
         if (f[x][i] != f[y][i]) x = f[x][i], y = f[y][i];
     return f[x][0];
@@ -27,7 +27,8 @@ int lca(int x, int y) {
 
 void sum(int x, int fa) {
     for (int i : g[x]) {
-        dfs(i, x);
+        if (x == fa) continue;
+        sum(i, x);
         d[x] += d[i];
     }
 }
@@ -44,6 +45,11 @@ int main() {
     for (int i = 1; i <= m; i++) {
         int u, v;
         cin >> u >> v;
+        d[u] += 1;
+        d[v] += 1;
+        d[lca(u, v)] -= 2;
     }
+    sum(1, 0);
+
     return 0;
 }
