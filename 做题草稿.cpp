@@ -25,5 +25,6 @@ int main() {
         root++;
         // q[root].push_back()
     }
+    cout << 2;
     return 0;
 }
