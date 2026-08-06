@@ -20,7 +20,7 @@ void dfs(int x, int fa) {
 void dfs_sum(int x, int fa) {
     for (int i : g[x]) {
         if (i == fa) continue;
-        sum[i] = sum[x] + s - 2 * dp[i];
+        sum[i] = sum[x] - 2 * dp[i] + n;
         dfs_sum(i, x);
     }
 }
@@ -34,7 +34,7 @@ int main() {
         g[v].push_back(u);
     }
     dfs(1, 0);
-    for (int i = 1; i <= n; i++) sum[1] += dep[i] - dep[1];
+    for (int i = 1; i <= n; i++) sum[1] += dep[i];
     dfs_sum(1, 0);
     for (int i = 1; i <= n; i++) cout << sum[i] << endl;
     return 0;
