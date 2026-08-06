@@ -2,32 +2,40 @@
 
 using namespace std;
 using i64 = long long;
-using itn = int;
-const int N = 200010;
-const int mod = 10007;
+const int N = 1e5 + 5;
 
-i64 n, a[N], dp[N], sum;
-vector<pair<int, int>> g[N];
+i64 n, dp[N], dep[N], sum[N], s;
+vector<int> g[N];
 
 void dfs(int x, int fa) {
     dp[x] = 1;
-    for (auto [a, b] : g[x]) {
-        if (a == fa) continue;
-        dfs(a, x);
-        dp[x] += dp[a];
-        sum += b * dp[a] * (n - dp[a]);
+    dep[x] = dep[fa] + 1;
+    for (int i : g[x]) {
+        if (i == fa) continue;
+        dfs(i, x);
+        dp[x] += dp[i];
+    }
+}
+
+void dfs_sum(int x, int fa) {
+    for (int i : g[x]) {
+        if (i == fa) continue;
+        sum[i] = sum[x] + s - 2 * dp[i];
+        dfs_sum(i, x);
     }
 }
 
 int main() {
     cin >> n;
     for (int i = 1; i < n; i++) {
-        int u, v, w;
-        cin >> u >> v >> w;
-        g[u].push_back({v, w});
-        g[v].push_back({u, w});
+        int u, v;
+        cin >> u >> v;
+        g[u].push_back(v);
+        g[v].push_back(u);
     }
     dfs(1, 0);
-    cout << sum << endl;
+    for (int i = 1; i <= n; i++) sum[1] += dep[i] - dep[1];
+    dfs_sum(1, 0);
+    for (int i = 1; i <= n; i++) cout << sum[i] << endl;
     return 0;
 }

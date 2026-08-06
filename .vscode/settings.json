@@ -1,7 +1,6 @@
 {
-  "code-runner.executorMap": {
-    "cpp": "cd $dir && g++ $fileName -O2 -s -std=c++23 -o $fileNameWithoutExt && wt.exe -d . -- bash -lc \"./$fileNameWithoutExt; read -p 'Press Enter...'\""
-  },
-  "code-runner.clearPreviousOutput": true,
-  "C_Cpp.errorSquiggles": "enabled"
+    "code-runner.executorMap": {
+        "cpp": "bash /tmp/run_cpp.sh \"$dir\" \"$fileNameWithoutExt\""
+    },
+    "code-runner.clearPreviousOutput": true
 }
