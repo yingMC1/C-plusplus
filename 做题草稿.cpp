@@ -4,14 +4,14 @@ using namespace std;
 using i64 = long long;
 const int N = 1e5 + 5;
 
-i64 n, dp[N], dep[N], sum[N], s;
+i64 n, dp[N], dep[N], sum[N];
 vector<int> g[N];
 
 void dfs(int x, int fa) {
     dp[x] = 1;
-    dep[x] = dep[fa] + 1;
     for (int i : g[x]) {
         if (i == fa) continue;
+        dep[i] = dep[x] + 1;
         dfs(i, x);
         dp[x] += dp[i];
     }
@@ -20,7 +20,7 @@ void dfs(int x, int fa) {
 void dfs_sum(int x, int fa) {
     for (int i : g[x]) {
         if (i == fa) continue;
-        sum[i] = sum[x] - 2 * dp[i] + n;
+        sum[i] = sum[x] + n - 2 * dp[i];
         dfs_sum(i, x);
     }
 }

@@ -1,7 +1,6 @@
 {
-  "code-runner.executorMap": {
-    "cpp": "bash /tmp/run_cpp.sh \"$dir\" \"$fileNameWithoutExt\""
-  },
-  "code-runner.clearPreviousOutput": true,
-  "code-runner.saveFileBeforeRun": true
+    "code-runner.executorMap": {
+        "cpp": "bash /home/qclaw/.local/bin/run_cpp.sh \"$dir\" \"$fileNameWithoutExt\""
+    },
+    "code-runner.clearPreviousOutput": true
 }
