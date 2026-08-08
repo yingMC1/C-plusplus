@@ -2,37 +2,42 @@
 
 using namespace std;
 using i64 = long long;
-const int INF = 0x3f;
-const int N = 2005;
+const int N = 3005;
 
-int n, q, dp[N][N], sz[N];
+int n, m, dp[N][N], f[N], sz[N], user[N];
 vector<pair<int, int>> g[N];
 
-void dfs(int x, int fa) {
+void dfs(int x) {
     dp[x][0] = 0;
     for (auto [i, w] : g[x]) {
-        if (i == fa) continue;
-        dfs(i, x);
-        for (int j = sz[x]; j >= 0; j--)
-            for (int k = 0; k <= sz[i]; k++)
-                if (dp[x][j] != -INF && dp[j][k] != -INF)
-                    dp[x][j + k + 1] =
-                        max(dp[x][j + k + 1], dp[x][j] + dp[j][k] + w);
-        sz[x] += sz[i] + 1;
+        dfs(i);
+        for (int j = sz[x]; j >= 0; j--) {
+            if (dp[x][j] = -0x3f) continue;
+            for (int k = 1; k <= sz[i]; k++) {
+                if (dp[i][k] == -0x3f) continue;
+                if (dp[x][j + k] < dp[x][j] + dp[i][k] - w)
+                    dp[x][j + k] < dp[x][j] + dp[i][k] - w;
+            }
+        }
+        for (int j = sz[x]; j >= 0; j--) dp[x][j] = f[j];
+        sz[x] += sz[i];
     }
 }
 
 int main() {
-    freopen("input", "r", stdin);
-    cin >> n >> q;
-    for (int i = 1; i < n; i++) {
-        int u, v, w;
-        cin >> u >> v >> w;
-        g[u].push_back({v, w});
-        g[v].push_back({u, w});
+    ios::sync_with_stdio(0), cin.tie(0), cout.tie(0);
+    cin >> n >> m;
+    for (int i = 1; i <= n - m; i++) {
+        int k;
+        cin >> k;
+        for (int j = 1; j <= k; j++) {
+            int u, w;
+            cin >> u >> w;
+            g[i].push_back({u, w});
+        }
     }
-    memset(dp, -INF, sizeof(dp));
-    dfs(1, 0);
-    cout << dp[1][q] << endl;
+    for (int i = 1; i <= m; i++) cin >> user[i];
+    memset(dp, -0x3f, sizeof(dp));
+    dfs(1);
     return 0;
 }
