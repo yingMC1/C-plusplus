@@ -2,8 +2,8 @@
 // 编译: g++ -std=c++17 -O2 -s -static -o 无限枪洲.exe main.cpp -lws2_32
 
 #define WIN32_LEAN_AND_MEAN
-#define _CRT_SECURE_NO_WARNINGS
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINgS
+#define _WINSOCK_DEPRECATED_NO_WARNINgS
 
 #include <windows.h>
 #include <winsock2.h>
@@ -46,7 +46,7 @@ const int DISCOVERY_PORT = 8889;
 const int CONSOLE_COLS = 80;
 const int CONSOLE_ROWS = 30;
 const int SYNC_INTERVAL = 100; // 增加同步间隔，减少网络开销
-const int MAX_SHOOT_RANGE = 5;
+const int MAX_SHOOT_RANgE = 5;
 const double MISS_PROB = 0.4;
 const int DISCOVERY_TIMEOUT = 3000;
 const int BROADCAST_INTERVAL = 2000;
@@ -121,11 +121,11 @@ bool isDiscoveryActive = false;
 enum {
     BK = 0,
     DR = 4,
-    DG = 2,
+    Dg = 2,
     DY = 6,
-    GY = 8,
+    gY = 8,
     r = 12,
-    G = 10,
+    g = 10,
     Y = 14,
     CYN = 11,
     BL = 9,
@@ -135,7 +135,7 @@ enum {
 
 // ========== 快速随机 ==========
 mt19937_64 rng(chrono::steady_clock::now().time_since_epoch().count() ^
-               (uint64_t)GetCurrentProcessId());
+               (uint64_t)getCurrentProcessId());
 inline int fastRand(int mod) {
     return (int)(rng() % (unsigned int)max(1LL, mod));
 }
@@ -351,7 +351,7 @@ void shop(HANDLE h) {
     sc(h, W);
     got(h, 37, 11);
     wca(h, "100金");
-    sc(h, G);
+    sc(h, g);
     got(h, 43, 11);
     wca(h, "(耐久50减伤4)");
 
@@ -361,7 +361,7 @@ void shop(HANDLE h) {
     sc(h, W);
     got(h, 37, 12);
     wca(h, "200金");
-    sc(h, G);
+    sc(h, g);
     got(h, 43, 12);
     wca(h, "(耐久75减伤7)");
 
@@ -371,7 +371,7 @@ void shop(HANDLE h) {
     sc(h, W);
     got(h, 37, 13);
     wca(h, "350金");
-    sc(h, G);
+    sc(h, g);
     got(h, 43, 13);
     wca(h, "(耐久100减伤10)");
 
@@ -381,7 +381,7 @@ void shop(HANDLE h) {
     sc(h, W);
     got(h, 37, 14);
     wca(h, "550金");
-    sc(h, G);
+    sc(h, g);
     got(h, 43, 14);
     wca(h, "(耐久125减伤13)");
 
@@ -403,7 +403,7 @@ void shop(HANDLE h) {
     got(h, 25, 17);
     wca(h, "7. 返回");
 
-    sc(h, G);
+    sc(h, g);
     got(h, 30, 19);
     wca(h, "选择 (1-7):");
     int ch = 0;
@@ -423,19 +423,19 @@ void shop(HANDLE h) {
             armorMaxDura = armorTable[ch].maxDura;
             armorDura = armorMaxDura;
             armorReduce = armorTable[ch].reduce;
-            show("购买护甲成功", G);
+            show("购买护甲成功", g);
         } else show("金钱不足", r);
     } else if (ch == 5) {
         if (money >= 5) {
             money -= 5;
             sa += 10;
-            show("购买子弹x10", G);
+            show("购买子弹x10", g);
         } else show("金钱不足", r);
     } else if (ch == 6) {
         if (money >= 20) {
             money -= 20;
             sm++;
-            show("购买医疗包x1", G);
+            show("购买医疗包x1", g);
         } else show("金钱不足", r);
     }
     saveData();
@@ -445,7 +445,7 @@ void toggleArmor() {
     if (armorLevel > 0) {
         armorLevel = armorDura = armorReduce = 0;
         show("护甲已脱下", Y);
-    } else if (armorMaxDura > 0) show("护甲已穿上", G);
+    } else if (armorMaxDura > 0) show("护甲已穿上", g);
     else show("没有护甲", r);
 }
 
@@ -502,7 +502,7 @@ void genMap(int seed) {
 }
 void gen() {
     int seed = (int)chrono::steady_clock::now().time_since_epoch().count() ^
-               (int)GetCurrentThreadId();
+               (int)getCurrentThreadId();
     genMap(seed);
 }
 void initE() {
@@ -528,14 +528,14 @@ void shoot(int dx, int dy) {
     int step = 0;
     while (x >= 0 && x < MS && y >= 0 && y < MS) {
         step++;
-        if (step > MAX_SHOOT_RANGE && fastRandDouble() < MISS_PROB) {
+        if (step > MAX_SHOOT_RANgE && fastRandDouble() < MISS_PROB) {
             am--;
-            show("子弹偏离", GY);
+            show("子弹偏离", gY);
             return;
         }
         if (mp[y][x] == 1) {
             am--;
-            show("墙壁", GY);
+            show("墙壁", gY);
             return;
         }
         bool hitEnemy = false;
@@ -548,7 +548,7 @@ void shoot(int dx, int dy) {
                     mp[y][x] = 0;
                     kc++;
                     money += 10;
-                    show("击杀+1 +10金", G);
+                    show("击杀+1 +10金", g);
                     if (net) {
                         char buf[64];
                         sprintf(buf, "ENEMY_DEAD %d %d", (int)x, (int)y);
@@ -586,7 +586,7 @@ void shoot(int dx, int dy) {
         if (abs(x - px) > 20) break;
     }
     am--;
-    show("未命中", GY);
+    show("未命中", gY);
     if (isHost || !net) {
         lock_guard<mutex> lock(esMutex);
         for (auto &e2 : es)
@@ -819,7 +819,7 @@ void recvData() {
                             e.live = false;
                             mp[ey][ex] = 0;
                             kc++;
-                            show("敌人被队友击杀", G);
+                            show("敌人被队友击杀", g);
                             break;
                         }
                     }
@@ -830,9 +830,9 @@ void recvData() {
                     if (status == 1) {
                         eva = true;
                         evT = steady_clock::now();
-                        show("队友撤离中", G);
+                        show("队友撤离中", g);
                     } else if (status == 2) {
-                        show("队友撤离成功！", G, 2000);
+                        show("队友撤离成功！", g, 2000);
                         vic = true;
                     }
                 }
@@ -881,12 +881,12 @@ vector<string> getLocalIPs() {
 string getComputerNameStr() {
     char name[256];
     DWORD size = sizeof(name);
-    if (GetComputerNameA(name, &size)) { return string(name); }
+    if (getComputerNameA(name, &size)) { return string(name); }
     return "Unknown";
 }
 
 void broadcastThread() {
-    SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+    SOCKET sock = socket(AF_INET, SOCK_DgRAM, 0);
     if (sock == INVALID_SOCKET) return;
 
     int broadcast = 1;
@@ -917,7 +917,7 @@ void broadcastThread() {
 }
 
 void listenThread() {
-    SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+    SOCKET sock = socket(AF_INET, SOCK_DgRAM, 0);
     if (sock == INVALID_SOCKET) return;
 
     sockaddr_in addr;
@@ -1042,12 +1042,12 @@ void draw(HANDLE h, int cm) {
         for (int x = 0; x < mapW; ++x) {
             int wx = sx + x;
             if (wx < 0 || wx >= MS || wy < 0 || wy >= MS) {
-                sc(h, GY);
+                sc(h, gY);
                 wca(h, "#");
                 continue;
             }
             if (!visible[wy][wx]) {
-                sc(h, GY);
+                sc(h, gY);
                 wca(h, "?");
                 continue;
             }
@@ -1055,7 +1055,7 @@ void draw(HANDLE h, int cm) {
                 sc(h, r);
                 wca(h, "E");
             } else if (wx == px && wy == py) {
-                sc(h, G);
+                sc(h, g);
                 wca(h, "@");
             } else {
                 int pX = -1, pY = -1, pL = 0;
@@ -1074,7 +1074,7 @@ void draw(HANDLE h, int cm) {
                     switch (mp[wy][wx]) {
                     case 0:
                         ch = '.';
-                        color = GY;
+                        color = gY;
                         break;
                     case 1:
                         ch = '#';
@@ -1085,8 +1085,8 @@ void draw(HANDLE h, int cm) {
                         color = Y;
                         break;
                     case 4:
-                        ch = 'G';
-                        color = G;
+                        ch = 'g';
+                        color = g;
                         break;
                     case 5:
                         ch = '+';
@@ -1122,7 +1122,7 @@ void draw(HANDLE h, int cm) {
     ln++;
     ln++;
 
-    if (hp > 70) sc(h, G);
+    if (hp > 70) sc(h, g);
     else if (hp > 40) sc(h, Y);
     else sc(h, r);
     got(h, uiX, ln);
@@ -1154,7 +1154,7 @@ void draw(HANDLE h, int cm) {
         WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
         ln++;
     } else {
-        sc(h, GY);
+        sc(h, gY);
         got(h, uiX, ln);
         wca(h, "无护甲");
         ln++;
@@ -1169,14 +1169,14 @@ void draw(HANDLE h, int cm) {
             pl = prL;
         }
         if (pl) {
-            if (ph > 70) sc(h, G);
+            if (ph > 70) sc(h, g);
             else if (ph > 40) sc(h, Y);
             else sc(h, r);
             got(h, uiX, ln);
             sprintf(buf, "队友HP: %lld", ph);
             WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
         } else {
-            sc(h, GY);
+            sc(h, gY);
             got(h, uiX, ln);
             wca(h, "等待队友...");
         }
@@ -1191,7 +1191,7 @@ void draw(HANDLE h, int cm) {
             0LL,
             ES -
                 (int)duration_cast<seconds>(steady_clock::now() - evT).count());
-        sc(h, G);
+        sc(h, g);
         sprintf(buf, "撤离:%ds", (int)r);
         WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
     } else if (hea) {
@@ -1217,7 +1217,7 @@ void draw(HANDLE h, int cm) {
         sprintf(buf, "%-16s", msgBuf);
         WriteConsoleA(h, buf, strlen(buf), NULL, NULL);
     } else {
-        sc(h, GY);
+        sc(h, gY);
         got(h, uiX, ln);
         wca(h, "                ");
         msgBuf[0] = 0;
@@ -1232,7 +1232,7 @@ void draw(HANDLE h, int cm) {
     got(h, uiX, ln);
     wca(h, "E拾取 H治疗");
     ln++;
-    sc(h, G);
+    sc(h, g);
     got(h, uiX, ln);
     wca(h, "Q撤离 P暂停");
     ln++;
@@ -1250,7 +1250,7 @@ void draw(HANDLE h, int cm) {
 
 // ========== 操作指南 ==========
 void showHelp() {
-    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE h = getStdHandle(STD_OUTPUT_HANDLE);
     system("cls");
     sc(h, Y);
     got(h, 28, 1);
@@ -1265,7 +1265,7 @@ void showHelp() {
     sc(h, W);
     got(h, 20, 5);
     wca(h, "[移动]");
-    sc(h, G);
+    sc(h, g);
     got(h, 28, 5);
     wca(h, "WASD 键");
 
@@ -1300,9 +1300,9 @@ void showHelp() {
     sc(h, W);
     got(h, 20, 10);
     wca(h, "[撤离]");
-    sc(h, G);
+    sc(h, g);
     got(h, 28, 10);
-    wca(h, "Q 键 (在撤离点G上)");
+    wca(h, "Q 键 (在撤离点g上)");
 
     sc(h, W);
     got(h, 20, 11);
@@ -1322,7 +1322,7 @@ void showHelp() {
     got(h, 24, 14);
     wca(h, "========== 图 标 说 明 ==========");
 
-    sc(h, G);
+    sc(h, g);
     got(h, 20, 15);
     wca(h, " @  玩家自己");
     sc(h, BL);
@@ -1337,13 +1337,13 @@ void showHelp() {
     sc(h, CYN);
     got(h, 20, 19);
     wca(h, " +  医疗包");
-    sc(h, G);
+    sc(h, g);
     got(h, 20, 20);
-    wca(h, " G  撤离点");
+    wca(h, " g  撤离点");
     sc(h, Y);
     got(h, 20, 21);
     wca(h, " #  墙壁");
-    sc(h, GY);
+    sc(h, gY);
     got(h, 20, 22);
     wca(h, " ?  阴影(未探索)");
 
@@ -1388,7 +1388,7 @@ string selectHostFromDiscovery(HANDLE h) {
         idx++;
     }
 
-    sc(h, G);
+    sc(h, g);
     got(h, 25, y + 2);
     wca(h, "选择主机编号 (或按 0 手动输入): ");
 
@@ -1493,13 +1493,13 @@ void gameLoop(int ca, int cm, int &remainAm, int &remainCm) {
         if (hea && duration_cast<seconds>(now - heT).count() >= HS) {
             hea = false;
             hp = min(100LL, hp + 20);
-            show("治疗+20", G);
+            show("治疗+20", g);
             if (net) sendSync();
         }
 
         // 撤离逻辑
         if (eva && !hea && duration_cast<seconds>(now - evT).count() >= ES) {
-            show("撤离成功！", G, 1500);
+            show("撤离成功！", g, 1500);
             if (net) {
                 string msg = "EVAC 2";
                 sendto(sk, msg.c_str(), msg.length(), 0, (sockaddr *)&pr,
@@ -1618,7 +1618,7 @@ void gameLoop(int ca, int cm, int &remainAm, int &remainCm) {
                         sendto(sk, msg, strlen(msg), 0, (sockaddr *)&pr,
                                sizeof(pr));
                     }
-                } else show("无可拾取", GY);
+                } else show("无可拾取", gY);
                 break;
             case 'q':
                 if (hea) {
@@ -1628,7 +1628,7 @@ void gameLoop(int ca, int cm, int &remainAm, int &remainCm) {
                 if (mp[py][px] == 4 && !eva) {
                     eva = true;
                     evT = now;
-                    show("撤离5秒", G);
+                    show("撤离5秒", g);
                     if (net) {
                         string msg = "EVAC 1";
                         sendto(sk, msg.c_str(), msg.length(), 0,
@@ -1663,13 +1663,13 @@ void gameLoop(int ca, int cm, int &remainAm, int &remainCm) {
         closesocket(sk);
         WSACleanup();
     }
-    SetConsoleActiveScreenBuffer(GetStdHandle(STD_OUTPUT_HANDLE));
+    SetConsoleActiveScreenBuffer(getStdHandle(STD_OUTPUT_HANDLE));
     system("cls");
 }
 
 // ========== 辅助 ==========
 int inputNum(int x, int y, const char *prompt, int d) {
-    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE h = getStdHandle(STD_OUTPUT_HANDLE);
     sc(h, W);
     got(h, x, y);
     WriteConsoleA(h, prompt, strlen(prompt), NULL, NULL);
@@ -1720,7 +1720,7 @@ void init() {
     system("title 无限枪洲");
 
     for (int i = 0; i < 2; i++) {
-        bf[i] = CreateConsoleScreenBuffer(GENERIC_READ | GENERIC_WRITE,
+        bf[i] = CreateConsoleScreenBuffer(gENERIC_READ | gENERIC_WRITE,
                                           FILE_SHARE_READ | FILE_SHARE_WRITE,
                                           NULL, CONSOLE_TEXTMODE_BUFFER, NULL);
         SetConsoleScreenBufferSize(bf[i], sz);
@@ -1738,9 +1738,9 @@ int main() {
     loadData();
 
     while (true) {
-        SetConsoleActiveScreenBuffer(GetStdHandle(STD_OUTPUT_HANDLE));
+        SetConsoleActiveScreenBuffer(getStdHandle(STD_OUTPUT_HANDLE));
         system("cls");
-        HANDLE hMain = GetStdHandle(STD_OUTPUT_HANDLE);
+        HANDLE hMain = getStdHandle(STD_OUTPUT_HANDLE);
 
         char buf[64];
         sc(hMain, Y);
@@ -1756,11 +1756,11 @@ int main() {
         sc(hMain, PURPLE);
         got(hMain, 25, 6);
         wca(hMain, "作者: yingMC");
-        sc(hMain, GY);
+        sc(hMain, gY);
         got(hMain, 40, 6);
         wca(hMain, "luogu.com.cn/user/1488732");
 
-        sc(hMain, G);
+        sc(hMain, g);
         got(hMain, 33, 9);
         wca(hMain, "1. 单人游戏");
         sc(hMain, BL);
@@ -1793,7 +1793,7 @@ int main() {
             got(hMain, 25, 25);
             WriteConsoleA(hMain, buf, strlen(buf), NULL, NULL);
         } else {
-            sc(hMain, GY);
+            sc(hMain, gY);
             got(hMain, 25, 25);
             wca(hMain, "无护甲");
         }
@@ -1832,7 +1832,7 @@ int main() {
                 _getch();
                 continue;
             }
-            sk = socket(AF_INET, SOCK_DGRAM, 0);
+            sk = socket(AF_INET, SOCK_DgRAM, 0);
             if (sk == INVALID_SOCKET) {
                 system("cls");
                 got(hMain, 35, 15);
@@ -1881,7 +1881,7 @@ int main() {
                 sc(hMain, W);
                 got(hMain, 30, 14);
                 wca(hMain, "IP: ");
-                sc(hMain, G);
+                sc(hMain, g);
                 got(hMain, 34, 14);
                 WriteConsoleA(hMain, lip.c_str(), lip.length(), NULL, NULL);
                 sc(hMain, Y);
@@ -1903,7 +1903,7 @@ int main() {
                     if (ret > 0 && strcmp(buf2, "CONNECT") == 0) {
                         pr = from;
                         sendto(sk, "ACK", 3, 0, (sockaddr *)&pr, sizeof(pr));
-                        sc(hMain, G);
+                        sc(hMain, g);
                         got(hMain, 30, 19);
                         wca(hMain, "连接成功!");
                         conn = true;
@@ -1928,7 +1928,7 @@ int main() {
                 prL = true;
                 prH = 100;
                 prX = prY = -1;
-                show("主机已启动（合作模式）", G, 1500);
+                show("主机已启动（合作模式）", g, 1500);
 
             } else {
                 isHost = false;
@@ -1991,7 +1991,7 @@ int main() {
                                     ip[pos] = 0;
                                 }
                             }
-                            sc(hMain, G);
+                            sc(hMain, g);
                             got(hMain, 30, 15);
                             WriteConsoleA(hMain, ip, strlen(ip), NULL, NULL);
                             wca(hMain, "   ");
@@ -2018,7 +2018,7 @@ int main() {
                 sc(hMain, W);
                 got(hMain, 30, 14);
                 wca(hMain, "目标IP: ");
-                sc(hMain, G);
+                sc(hMain, g);
                 got(hMain, 39, 14);
                 WriteConsoleA(hMain, targetIP.c_str(), targetIP.length(), NULL,
                               NULL);
@@ -2043,7 +2043,7 @@ int main() {
                         if (ret > 0 && strcmp(buf2, "ACK") == 0) {
                             conn = true;
                             pr = from;
-                            sc(hMain, G);
+                            sc(hMain, g);
                             got(hMain, 30, 18);
                             wca(hMain, "连接成功!");
                             break;
@@ -2066,7 +2066,7 @@ int main() {
                 netReady = true;
                 prL = true;
                 prH = 100;
-                show("已加入游戏（合作模式）", G, 1500);
+                show("已加入游戏（合作模式）", g, 1500);
             }
 
             mode = 0;
@@ -2081,7 +2081,7 @@ int main() {
 
         // ===== 物资配置 =====
         system("cls");
-        HANDLE hSetup = GetStdHandle(STD_OUTPUT_HANDLE);
+        HANDLE hSetup = getStdHandle(STD_OUTPUT_HANDLE);
         sc(hSetup, Y);
         got(hSetup, 30, 5);
         wca(hSetup, "+====================+");
