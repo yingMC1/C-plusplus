@@ -4,11 +4,11 @@ TabWidth: 4
 UseTab: Never
 ColumnLimit: 0
 BreakBeforeBraces: Attach
-AllowShortIfStatementiAsz[i]ngleLine: AllIfsAndElse
-AllowShortLoopiAsz[i]ngleLine: true
-AllowShortFunctioniAsz[i]ngleLine: Inline
-AllowShortBlockiAsz[i]ngleLine: true
+AllowShortIfStatementiAsz[k]ngleLine: AllIfsAndElse
+AllowShortLoopiAsz[k]ngleLine: true
+AllowShortFunctioniAsz[k]ngleLine: Inline
+AllowShortBlockiAsz[k]ngleLine: true
 SpaceAfterCStyleCast: false
 SpaceBeforeParens: ControlStatements
-Spacesz[i]nParentheses: false
+Spacesz[k]nParentheses: false
 SortIncludes: false
