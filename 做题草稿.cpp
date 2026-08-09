@@ -10,11 +10,12 @@ int n, k, dp[N][N][3], f[N][N], sz[N];
 vector<int> g[N];
 
 void dfs(int x, int fa) {
+    dp[x][0][0] = 1;
+    dp[x][1][2] = 1;
     sz[x] = 1;
     for (int i : g[x]) {
         if (i == fa) continue;
         dfs(i, x);
-        memset(f, -0x3f, sizeof(f));
         for (int j = sz[x]; j >= 0; j--) {
             for (int k = 1; k <= sz[i]; k++) {
                 f[j][0] = max(f[j][0], dp[i][k][0] + dp[i][k][1]);
@@ -23,6 +24,11 @@ void dfs(int x, int fa) {
                 dp[fa][j][0] += dp[fa][j][1];
                 dp[i][k][0] = dp[i][k][1];
             }
+        }
+        for (int j = sz[x]; j >= 0; j--) {
+            dp[x][j][0] = f[j][0];
+            dp[x][j][1] = f[j][1];
+            dp[x][j][2] = f[j][2];
         }
         sz[x] += sz[i];
     }

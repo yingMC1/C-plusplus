@@ -5,5 +5,6 @@
     "cpp": "/home/qclaw/.local/bin/run_cpp_output.sh \"$dir\" \"$fileNameWithoutExt\""
   },
   "code-runner.fileDirectoryAsCwd": false,
-  "code-runner.saveAllFilesBeforeRun": true
+  "code-runner.saveAllFilesBeforeRun": true,
+  "workbench.iconTheme": "vscode-icons"
 }
