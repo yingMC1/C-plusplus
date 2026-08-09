@@ -32,7 +32,7 @@ int main() {
     freopen("input.txt", "r", stdin);
     cin >> n >> k;
     for (int i = 1; i <= n; i++) {
-        int u, v, w;
+        int u, v;
         cin >> u >> v;
         g[u].push_back(v);
         g[v].push_back(u);
@@ -40,7 +40,7 @@ int main() {
     dfs(1, 0);
     for (int i = 0; i <= n; i++) {
         i64 ans = (dp[1][k][0] + dp[1][k][1] + dp[1][k][2]) % mod;
-        cout << ans << '\n';
+        cout << ans << endl;
     }
     return 0;
 }
