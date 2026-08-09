@@ -37,9 +37,10 @@ int main() {
         g[u].push_back(v);
         g[v].push_back(u);
     }
-    memset(dp, -0x3f, sizeof(dp));
     dfs(1, 0);
-    for (int i = 0; i <= n; i++)
-        cout << max({dp[1][i][0], dp[1][i][1], dp[1][i][2]}) << endl;
+    for (int i = 0; i <= n; i++) {
+        i64 ans = (dp[1][k][0] + dp[1][k][1] + dp[1][k][2]) % mod;
+        cout << ans << '\n';
+    }
     return 0;
 }
