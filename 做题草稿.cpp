@@ -34,6 +34,7 @@ void dfs(int x, int fa) {
 }
 
 int main() {
+    freopen("input.txt", "r", stdin);
     cin >> n >> k;
     for (int j = 1; j < n; j++) {
         int u, v, w;
@@ -43,7 +44,6 @@ int main() {
     }
     memset(dp, -0x3f, sizeof(dp));
     dfs(1, 0);
-    for (int i = 1; i <= n; i++)
-        cout << dp[1][k] << endl;
+    cout << dp[1][k] << endl;
     return 0;
 }
