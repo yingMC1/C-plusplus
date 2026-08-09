@@ -1,7 +1,8 @@
 {
-  "code-runner.saveFileBeforeRun": true,
+  "code-runner.runInTerminal": true,
   "code-runner.executorMap": {
-    "cpp": "bash /home/qclaw/.local/bin/run_cpp.sh \"$dir\" \"$fileNameWithoutExt\""
+    "cpp": "/home/qclaw/.local/bin/run_cpp.sh \"$dir\" \"$fileNameWithoutExt\""
   },
-  "code-runner.clearPreviousOutput": true
+  "code-runner.fileDirectoryAsCwd": false,
+  "code-runner.saveAllFilesBeforeRun": true
 }

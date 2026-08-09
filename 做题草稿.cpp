@@ -2,6 +2,7 @@
 
 using namespace std;
 using i64 = long long;
+const int mod = 1e9 + 7;
 const int N = 2005;
 
 // 不放、被看守、自己放
@@ -19,7 +20,8 @@ void dfs(int x, int fa) {
                 f[j][0] = max(f[j][0], dp[i][k][0] + dp[i][k][1]);
                 f[j][1] = max(f[j][1], dp[i][k][2]);
                 f[j][2] = max({f[j][2], dp[i][k][0], dp[i][k][1], dp[i][k][2]});
-                f[fa][j] += 1;
+                dp[fa][j][0] += dp[fa][j][1];
+                dp[i][k][0] = dp[i][k][1];
             }
         }
         sz[x] += sz[i];
@@ -37,5 +39,7 @@ int main() {
     }
     memset(dp, -0x3f, sizeof(dp));
     dfs(1, 0);
+    for (int i = 0; i <= n; i++)
+        cout << max({dp[1][i][0], dp[1][i][1], dp[1][i][2]}) << endl;
     return 0;
 }
