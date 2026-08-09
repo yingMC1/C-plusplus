@@ -24,7 +24,7 @@ void dfs(int x, int fa) {
             for (int t = 0; t <= sz[i]; t++) {
                 if (dp[i][t] < 0)
                     continue;
-                f[j] = max(f[j], dp[x][j] + dp[i][t] + w * (t * (k - t) + (sz[i] - t) * ((n - sz[i]) - (k - t))));
+                f[j] = max(f[j], dp[x][j] + dp[i][t] + w * (t * (k - t) + (sz[i] - t) * (n - sz[i] - k + t)));
             }
         }
         sz[x] += sz[i];
@@ -36,13 +36,14 @@ void dfs(int x, int fa) {
 int main() {
     cin >> n >> k;
     for (int j = 1; j < n; j++) {
-        int u, i, w;
-        cin >> u >> i >> w;
-        g[u].push_back({i, w});
-        g[i].push_back({u, w});
+        int u, v, w;
+        cin >> u >> v >> w;
+        g[u].push_back({v, w});
+        g[v].push_back({u, w});
     }
     memset(dp, -0x3f, sizeof(dp));
     dfs(1, 0);
-    cout << dp[1][k] << endl;
+    for (int i = 1; i <= n; i++)
+        cout << dp[1][k] << endl;
     return 0;
 }
