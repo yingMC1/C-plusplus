@@ -1,6 +1,6 @@
 #include <bits/stdc++.h>
 
-#define lowbit(x) ((x) & (-(x)))
+#define lowbit(x) x & -(x)
 #define endl '\n'
 using namespace std;
 using i64 = long long;
@@ -25,20 +25,11 @@ i64 query(int x) {
 }
 
 int main() {
-    freopen("input.txt", "r", stdin);
-    cin >> n >> m;
-    while (m--) {
-        int op;
-        cin >> op;
-        if (op == 1) {
-            int x;
-            cin >> x;
-            update(x, 1);
-        } else {
-            int l, r;
-            cin >> l >> r;
-            cout << query(r) - query(l - 1) << endl;
-        }
+    cin >> n;
+    for (int i = 1; i <= n; i++) {
+        int x;
+        cin >> x;
+        update(i, x);
     }
     return 0;
 }
