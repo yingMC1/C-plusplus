@@ -6,7 +6,8 @@ using namespace std;
 using i64 = long long;
 const int N = 5e5 + 5;
 
-int n, m, tree[N];
+int n, tree[N], f[N][N], cnt[N], a[N], us[N];
+string s1, s2;
 
 void update(int x, int w) {
     while (x <= n) {
@@ -25,11 +26,24 @@ i64 query(int x) {
 }
 
 int main() {
-    cin >> n;
-    for (int i = 1; i <= n; i++) {
-        int x;
-        cin >> x;
-        update(i, x);
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    cin >> n >> s1 >> s2;
+    for (int i = 0; i < n; i++) {
+        int c = s2[i] - 'A';
+        f[c][cnt[c]] = i;
+        cnt[c]++;
     }
+    for (int i = 0; i < n; i++) {
+        int c = s1[i] - 'A';
+        a[i] = f[c][us[c]];
+        us[c]++;
+    }
+    i64 ans = 0;
+    for (int i = 0; i < n; i++) {
+        ans += i - query(a[i] + 1);
+        update(a[i] + 1, 1);
+    }
+    cout << ans << endl;
     return 0;
 }
