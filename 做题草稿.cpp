@@ -1,50 +1,118 @@
 #include <bits/stdc++.h>
 
-#define lowbit(x) x & (-x)
+#define int long long
 #define endl '\n'
 using namespace std;
 using i64 = long long;
-const int N = 300005;
+const int N = 2e5 + 5;
 
-int n, m, a[N];
+i64 n, m, a[N], tree[N << 2], tag1[N << 2], tag2[N << 2], mx[N << 2];
 
-struct bit {
-    int tree[N];
-    void update(int x, int w) {
-        while (x <= n) {
-            tree[x] ^= w;
-            x += lowbit(x);
-        }
+void down_sum1(int x, int l, int r, int w) {
+    tree[x] = w * (r - l + 1);
+    tag1[x] = w;
+    tag2[x] = 0;
+    mx[x] = w;
+}
+
+void down_sum2(int x, int l, int r, int w) {
+    tree[x] += w * (r - l + 1);
+    tag2[x] += w;
+    mx[x] += w;
+}
+
+void down(int x, int l, int r) {
+    if (!tag1[x] && !tag2[x]) return;
+    int mid = l + r >> 1;
+    if (tag1[x]) {
+        down_sum1(x * 2, l, mid, tag1[x]);
+        down_sum1(x * 2 + 1, mid + 1, r, tag1[x]);
     }
-    int query(int x) {
-        int sum = 0;
-        while (x) {
-            sum ^= tree[x];
-            x -= lowbit(x);
-        }
-        return sum;
+    if (tag2[x]) {
+        down_sum2(x * 2, l, mid, tag2[x]);
+        down_sum2(x * 2 + 1, mid + 1, r, tag2[x]);
     }
-} t;
+    tag1[x] = tag2[x] = 0;
+}
 
-int main() {
+void up(int x) {
+    tree[x] = tree[x * 2] + tree[x * 2 + 1];
+    mx[x] = max(mx[x * 2], mx[x * 2 + 1]);
+}
+
+void build(int x, int l, int r) {
+    tag1[x] = tag2[x] = 0;
+    if (l == r) {
+        tree[x] = mx[x] = a[l];
+        return;
+    }
+    int mid = l + r >> 1;
+    build(x * 2, l, mid);
+    build(x * 2 + 1, mid + 1, r);
+    up(x);
+}
+
+void update(int x, int l, int r, int ql, int qr, int w) {
+    if (ql <= l && r <= qr) {
+        down_sum1(x, l, r, w);
+        return;
+    }
+    down(x, l, r);
+    int mid = l + r >> 1;
+    if (ql <= mid) update(x * 2, l, mid, ql, qr, w);
+    if (qr > mid) update(x * 2 + 1, mid + 1, r, ql, qr, w);
+    up(x);
+}
+
+void update2(int x, int l, int r, int ql, int qr, int w) {
+    if (ql <= l && r <= qr) {
+        down_sum2(x, l, r, w);
+        return;
+    }
+    down(x, l, r);
+    int mid = l + r >> 1;
+    if (ql <= mid) update2(x * 2, l, mid, ql, qr, w);
+    if (qr > mid) update2(x * 2 + 1, mid + 1, r, ql, qr, w);
+    up(x);
+}
+
+int query(int x, int l, int r, int ql, int qr) {
+    if (ql <= l && r <= qr) return tree[x];
+    down(x, l, r);
+    int mid = l + r >> 1, res = 0;
+    if (ql <= mid) res += query(x * 2, l, mid, ql, qr);
+    if (qr > mid) res += query(x * 2 + 1, mid + 1, r, ql, qr);
+    return res;
+}
+
+int query2(int x, int l, int r, int ql, int qr) {
+    if (ql <= l && r <= qr) return mx[x];
+    down(x, l, r);
+    int mid = l + r >> 1, res = -1e18;
+    if (ql <= mid) res = max(query2(x * 2, l, mid, ql, qr), res);
+    if (qr > mid) res = max(query2(x * 2 + 1, mid + 1, r, ql, qr), res);
+    return res;
+}
+
+signed main() {
     ios::sync_with_stdio(false);
+    cout.tie(nullptr);
     cin.tie(nullptr);
-
     cin >> n >> m;
-    for (int i = 1; i <= n; i++) {
-        cin >> a[i];
-        t.update(i, a[i] ^ a[i - 1]);
-    }
-
-    while (m--) {
-        int op, x, y;
-        cin >> op >> x >> y;
+    for (int i = 1; i <= n; i++) cin >> a[i];
+    build(1, 1, n);
+    for (int i = 1; i <= m; i++) {
+        int op, l, r;
+        cin >> op >> l >> r;
         if (op == 1) {
-            t.update(x, y);
-            a[x] ^= y;
-        } else {
-            cout << (t.query(y) ^ t.query(x - 1)) << endl;
-        }
+            int x;
+            cin >> x;
+            update(1, 1, n, l, r, x);
+        } else if (op == 2) {
+            int x;
+            cin >> x;
+            update2(1, 1, n, l, r, x);
+        } else if (op == 3) cout << query(1, 1, n, l, r) << endl;
+        else cout << query2(1, 1, n, l, r) << endl;
     }
-    return 0;
 }
